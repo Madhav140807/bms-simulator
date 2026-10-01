@@ -20,7 +20,7 @@ static void print_header(void)
 
 static void print_row(int t, const sim_pack_t *pack)
 {
-    printf("%d,%.3f,%.4f", t, pack->current_a, sim_pack_voltage(pack));
+    printf("%d,%.3f,%.4f", t, sim_pack_current(pack), sim_pack_voltage(pack));
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         const sim_cell_t *c = &pack->cells[i];
         printf(",%.4f,%.4f,%.2f", sim_cell_voltage(c), c->soc, c->temp_c);

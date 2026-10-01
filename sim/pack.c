@@ -1,25 +1,57 @@
 #include "pack.h"
 
-#define DEFAULT_AMBIENT_C 25.0
+#define DEFAULT_AMBIENT_C     25.0
+#define DEFAULT_BALANCE_R_OHM 33.0
 
 void sim_pack_init(sim_pack_t *pack, double capacity_ah, double soc, double r_ohm)
 {
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         sim_cell_init(&pack->cells[i], capacity_ah, soc, r_ohm);
+        pack->balance_on[i] = false;
     }
-    pack->current_a = 0.0;
+    pack->balance_r_ohm = DEFAULT_BALANCE_R_OHM;
+    pack->contactor_closed = true;
+    pack->load_a = 0.0;
     pack->ambient_c = DEFAULT_AMBIENT_C;
 }
 
 void sim_pack_set_current(sim_pack_t *pack, double current_a)
 {
-    pack->current_a = current_a;
+    pack->load_a = current_a;
+}
+
+void sim_pack_set_contactor(sim_pack_t *pack, bool closed)
+{
+    pack->contactor_closed = closed;
+}
+
+void sim_pack_set_balance(sim_pack_t *pack, int cell, bool on)
+{
+    if (cell >= 0 && cell < SIM_PACK_CELLS) {
+        pack->balance_on[cell] = on;
+    }
+}
+
+/* Current actually flowing through the string: zero when the contactor is open. */
+double sim_pack_current(const sim_pack_t *pack)
+{
+    return pack->contactor_closed ? pack->load_a : 0.0;
+}
+
+double sim_pack_balance_current(const sim_pack_t *pack, int cell)
+{
+    if (cell < 0 || cell >= SIM_PACK_CELLS || !pack->balance_on[cell]) {
+        return 0.0;
+    }
+    return sim_ocv_from_soc(pack->cells[cell].soc) / pack->balance_r_ohm;
 }
 
 void sim_pack_step(sim_pack_t *pack, double dt_s)
 {
+    double string_a = sim_pack_current(pack);
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
-        sim_cell_step(&pack->cells[i], pack->current_a, dt_s, pack->ambient_c);
+        double cell_a = string_a + sim_pack_balance_current(pack, i);
+        sim_cell_step(&pack->cells[i], cell_a, dt_s, pack->ambient_c);
     }
 }
 
