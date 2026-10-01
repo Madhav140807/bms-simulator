@@ -1,60 +1,52 @@
 #include <stdio.h>
-#include "balance.h"
-#include "hal_sim.h"
-#include "pack.h"
-#include "protection.h"
-#include "soc.h"
+#include <stdlib.h>
+#include <string.h>
+#include "csv.h"
+#include "scenario.h"
 
-#define CAPACITY_AH   3.0
-#define START_SOC     1.0
-#define CELL_R_OHM    0.02
-#define LOAD_A        3.0
-#define DT_S          1.0
-#define DURATION_S    4200  /* 1C discharge, then rest after the UV trip */
-#define LOG_EVERY_S   60
+#define DEFAULT_SCENARIO "discharge_1c"
+#define DEFAULT_EVERY_S  60
 
-static void print_header(void)
+static void usage(FILE *out)
 {
-    printf("time_s,current_a,pack_v");
-    for (int i = 0; i < SIM_PACK_CELLS; i++) {
-        printf(",cell%d_v,cell%d_soc,cell%d_temp_c", i, i, i);
-    }
-    printf(",contactor,faults,soc_est_pct,balance_mask\n");
+    fprintf(out, "usage: bms [scenario] [--every SECONDS] | --list\n"
+                 "Runs a scenario and prints CSV to stdout (default %s, every %d s).\n",
+            DEFAULT_SCENARIO, DEFAULT_EVERY_S);
 }
 
-static void print_row(int t, const sim_pack_t *pack, const prot_t *prot,
-                      const soc_t *soc, const bal_t *bal)
+static void list(void)
 {
-    printf("%d,%.3f,%.4f", t, sim_pack_current(pack), sim_pack_voltage(pack));
-    for (int i = 0; i < SIM_PACK_CELLS; i++) {
-        const sim_cell_t *c = &pack->cells[i];
-        printf(",%.4f,%.4f,%.2f", sim_cell_voltage(c), c->soc, c->temp_c);
+    for (int i = 0; i < scenario_count(); i++) {
+        const scenario_t *s = scenario_get(i);
+        printf("%-14s %s\n", s->name, s->desc);
     }
-    printf(",%d,0x%02x,%.2f,0x%02x\n", pack->contactor_closed, prot->faults,
-           soc_get(soc) / 100.0, bal->mask);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-    sim_pack_t pack;
-    sim_pack_init(&pack, CAPACITY_AH, START_SOC, CELL_R_OHM);
-    sim_pack_set_current(&pack, LOAD_A);
-    hal_sim_attach(&pack);
-    prot_t prot;
-    protection_init(&prot, NULL);
-    soc_t soc;
-    soc_init(&soc, NULL);
-    bal_t bal;
-    balance_init(&bal, NULL);
-    print_header();
-    for (int t = 0; t <= DURATION_S; t++) {
-        protection_step(&prot);
-        soc_step(&soc, (uint32_t)(DT_S * 1000));
-        balance_step(&bal, prot.faults == PROT_FAULT_NONE);
-        if (t % LOG_EVERY_S == 0) {
-            print_row(t, &pack, &prot, &soc, &bal);
+    const char *name = DEFAULT_SCENARIO;
+    long every = DEFAULT_EVERY_S;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--list") == 0) {
+            list();
+            return 0;
+        } else if (strcmp(argv[i], "--every") == 0 && i + 1 < argc) {
+            every = strtol(argv[++i], NULL, 10);
+        } else if (argv[i][0] == '-') {
+            usage(stderr);
+            return 2;
+        } else {
+            name = argv[i];
         }
-        sim_pack_step(&pack, DT_S);
     }
+    const scenario_t *scn = scenario_find(name);
+    if (scn == NULL || every <= 0) {
+        if (scn == NULL) {
+            fprintf(stderr, "unknown scenario: %s\n", name);
+        }
+        usage(stderr);
+        return 2;
+    }
+    csv_run(stdout, scn, (uint32_t)every);
     return 0;
 }

@@ -1,3 +1,4 @@
+#include <string.h>
 #include "unity.h"
 #include "api.h"
 #include "protection.h"
@@ -147,6 +148,37 @@ void test_fault_stops_balancing(void)
     TEST_ASSERT_EQUAL_INT(0x00, api_balance_mask());
 }
 
+void test_scenario_names_and_bounds(void)
+{
+    TEST_ASSERT_TRUE(api_scenario_count() >= 6);
+    TEST_ASSERT_EQUAL_STRING("discharge_1c", api_scenario_name(0));
+    TEST_ASSERT_TRUE(strlen(api_scenario_desc(0)) > 0);
+    TEST_ASSERT_EQUAL_STRING("", api_scenario_name(99));
+    TEST_ASSERT_EQUAL_INT(0, api_start_scenario(99));
+    TEST_ASSERT_EQUAL_INT(0, api_scenario_active());
+}
+
+void test_scenario_runs_and_stops_at_end(void)
+{
+    TEST_ASSERT_EQUAL_INT(1, api_start_scenario(0));
+    TEST_ASSERT_EQUAL_INT(1, api_scenario_active());
+    TEST_ASSERT_EQUAL_DOUBLE(3.0, api_load_a());
+    api_step(10000);
+    TEST_ASSERT_EQUAL_INT(1, api_scenario_done());
+    TEST_ASSERT_EQUAL_DOUBLE(api_scenario_duration_s(), api_time_s());
+    TEST_ASSERT_TRUE(api_faults() & PROT_FAULT_UV);
+}
+
+void test_reset_leaves_scenario_mode(void)
+{
+    api_start_scenario(0);
+    api_reset(0.5);
+    TEST_ASSERT_EQUAL_INT(0, api_scenario_active());
+    TEST_ASSERT_EQUAL_INT(0, api_scenario_done());
+    api_step(5);
+    TEST_ASSERT_EQUAL_DOUBLE(5.0, api_time_s());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -166,5 +198,8 @@ int main(void)
     RUN_TEST(test_balancing_bleeds_high_cell_at_rest);
     RUN_TEST(test_balancing_can_be_disabled);
     RUN_TEST(test_fault_stops_balancing);
+    RUN_TEST(test_scenario_names_and_bounds);
+    RUN_TEST(test_scenario_runs_and_stops_at_end);
+    RUN_TEST(test_reset_leaves_scenario_mode);
     return UNITY_END();
 }

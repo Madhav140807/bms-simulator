@@ -52,6 +52,8 @@ h1 { font-size: 20px; margin: 0; }
 .controls label { display: block; color: var(--ink-2); font-size: 12px; margin-bottom: 4px; }
 .controls label.check { display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 14px; }
 .controls input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.controls .scenario { grid-column: 1 / -1; }
+.controls .note { color: var(--ink-2); font-size: 12px; margin-top: 6px; }
 .tile .note { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
 .controls input[type=range] { width: 100%; accent-color: var(--accent); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -90,6 +92,14 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
   <div id="error" class="card"></div>
 
   <section class="card controls" aria-label="Controls">
+    <div class="scenario">
+      <label for="scenario">Scenario (same table as <code>build/bms --list</code>)</label>
+      <div class="row">
+        <select id="scenario"><option value="-1">Free run (manual controls)</option></select>
+        <button id="start">Start</button>
+      </div>
+      <div class="note" id="scnNote">Drive the pack with the controls below.</div>
+    </div>
     <div>
       <label for="load">Load current (+ discharge, − charge): <span id="loadVal" class="val"></span></label>
       <input id="load" type="range" min="-5" max="15" step="0.5" value="3">
@@ -243,6 +253,8 @@ function sample() {
   push(charts.curr, 0, t, api._api_current_a());
   for (const c of Object.values(charts)) c.update("none");
   renderStatus(t);
+  renderControls();
+  renderScenario(t);
 }
 
 function setStatus(el, ok, okText, badText) {
@@ -273,20 +285,68 @@ function renderStatus(t) {
   }
 }
 
-function syncInputs() {
-  const load = parseFloat($("load").value), amb = parseFloat($("ambient").value);
+// Controls -> sim: each control only pushes its own value.
+const INPUTS = {
+  load: (el) => api._api_set_load(parseFloat(el.value)),
+  ambient: (el) => api._api_set_ambient(parseFloat(el.value)),
+  balancing: (el) => api._api_set_balancing(el.checked ? 1 : 0),
+};
+
+// Sim -> controls, so scenario events show up on the sliders.
+function renderControls() {
+  const load = api._api_load_a(), amb = api._api_ambient_c();
   $("loadVal").textContent = load.toFixed(1) + " A";
-  $("ambientVal").textContent = amb + " °C";
-  api._api_set_load(load);
-  api._api_set_ambient(amb);
-  api._api_set_balancing($("balancing").checked ? 1 : 0);
+  $("ambientVal").textContent = amb.toFixed(0) + " °C";
+  $("load").value = load;
+  $("ambient").value = amb;
+  $("balancing").checked = api._api_balancing() === 1;
+}
+
+function renderScenario(t) {
+  if (!api._api_scenario_active()) return;
+  const i = parseInt($("scenario").value, 10);
+  const total = api._api_scenario_duration_s();
+  const done = api._api_scenario_done();
+  $("scnNote").textContent = `${api.UTF8ToString(api._api_scenario_desc(i))}. `
+    + (done ? `Finished at ${fmtTime(total)}.` : `${fmtTime(t)} / ${fmtTime(total)}`);
+  if (done && running) setRunning(false);
+}
+
+function setRunning(on) {
+  running = on;
+  $("run").textContent = running ? "Pause" : "Run";
+}
+
+function clearCharts() {
+  for (const c of Object.values(charts)) c.data.datasets.forEach((d) => { d.data = []; });
 }
 
 function reset() {
+  $("scenario").value = "-1";
+  $("scnNote").textContent = "Drive the pack with the controls below.";
   api._api_reset(1.0);
-  syncInputs();
-  for (const c of Object.values(charts)) c.data.datasets.forEach((d) => { d.data = []; });
+  api._api_set_load(3.0);
+  clearCharts();
+  setRunning(true);
   sample();
+}
+
+function startScenario() {
+  const i = parseInt($("scenario").value, 10);
+  if (i < 0 || !api._api_start_scenario(i)) return reset();
+  clearCharts();
+  setRunning(true);
+  sample();
+}
+
+function fillScenarios() {
+  for (let i = 0; i < api._api_scenario_count(); i++) {
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = api.UTF8ToString(api._api_scenario_name(i));
+    o.title = api.UTF8ToString(api._api_scenario_desc(i));
+    $("scenario").appendChild(o);
+  }
 }
 
 function tick() {
@@ -296,13 +356,15 @@ function tick() {
 }
 
 function wire() {
-  $("load").addEventListener("input", syncInputs);
-  $("ambient").addEventListener("input", syncInputs);
-  $("balancing").addEventListener("change", () => { syncInputs(); sample(); });
-  $("run").addEventListener("click", () => {
-    running = !running;
-    $("run").textContent = running ? "Pause" : "Run";
-  });
+  for (const [id, push] of Object.entries(INPUTS)) {
+    $(id).addEventListener(id === "balancing" ? "change" : "input", () => {
+      push($(id));
+      renderStatus(api._api_time_s());
+      renderControls();
+    });
+  }
+  $("run").addEventListener("click", () => setRunning(!running));
+  $("start").addEventListener("click", startScenario);
   $("reset").addEventListener("click", reset);
   $("clear").addEventListener("click", () => {
     if (!api._api_clear_faults()) alert("A fault condition is still present; fix it before clearing.");
@@ -311,8 +373,8 @@ function wire() {
   $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });
   $("imbalance").addEventListener("click", () => {
     [0.80, 0.72, 0.66, 0.75].forEach((soc, i) => api._api_set_cell_soc(i, soc));
-    $("load").value = 0;
-    syncInputs();
+    api._api_set_load(0);
+    renderControls();
     sample();
   });
 }
@@ -328,6 +390,7 @@ else createBms().then((m) => {
   api = m;
   window.bms = m;   // handy for poking at the sim from the console
   buildCharts();
+  fillScenarios();
   wire();
   reset();
   setInterval(tick, TICK_MS);

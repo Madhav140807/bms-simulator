@@ -6,7 +6,7 @@
 3. [x] Firmware: protection (over/under voltage, over current, over temp) with fault state
 4. [x] Firmware: SOC estimation (coulomb counting + OCV correction)
 5. [x] Firmware: passive cell balancing
-6. [ ] Harness: scenario runner wiring sim + HAL + firmware, CSV output
+6. [x] Harness: scenario runner wiring sim + HAL + firmware, CSV output
 7. [x] WebAssembly build (Emscripten)
 8. [x] Web dashboard (HTML/JS + Chart.js)
 
@@ -86,6 +86,34 @@
 - Tests: 17 balance (selection, hysteresis, each inhibit, HAL driving, sim
   convergence at rest, no balancing under load) and 3 more API tests
   (16 total). All suites pass.
+
+## Milestone 6: Scenario runner
+- `harness/system.c` + `.h`: `bms_sys_t` bundles the pack and all firmware
+  (protection, SOC, balancing). `sys_step()` = firmware then 1 s of sim.
+  Used by both the CSV runner and the WASM API, so they cannot drift apart.
+- `harness/scenario.c` + `.h`: scenarios are data (start SOC, duration, time
+  ordered events: load, ambient, cell SOC, clear faults, balancing on/off).
+  Six built in: `discharge_1c` (UV at ~1:00:00), `charge` (2.9 A, OV at
+  ~0:50:00), `overcurrent` (12 A pulse trips, scripted clear recloses),
+  `over_temp` (65 C ambient, OT at ~0:25:00), `imbalance` (80/72/66/75 %
+  at rest, balanced in ~3.3 h), `weak_cell` (one cell at 30 %, UV at 0:18:00).
+- `harness/csv.c`: header, rows and `csv_run()`; final state is always
+  written. `harness/main.c` is now a CLI:
+  `build/bms [scenario] [--every SECONDS]`, `build/bms --list`.
+  `make run SCENARIO=charge`, `make scenarios` writes `build/csv/*.csv`.
+  Default output (`discharge_1c`, every 60 s) keeps the old columns.
+- Makefile: tests and the native binary link every harness module except
+  `main.c`; headers are now prerequisites so header edits trigger rebuilds.
+- Dashboard: scenario picker (free run + the six) running the same C table
+  through the API; progress note, sliders and balancing toggle follow
+  scenario events, run auto-pauses at the end; Reset returns to free run.
+  Each control now pushes only its own value to the sim.
+- Verified in headless Chromium: charge ends in OV and auto-pauses with the
+  load label at -2.9 A, overcurrent recovers, weak_cell ends in UV, reset
+  returns to free run; balancing and protection checks still pass.
+- Tests: 17 scenario (system, table sanity, event timing, every scenario's
+  outcome, CSV row/column counts) and 3 more API tests (19 total). 115 tests
+  across 8 suites, all passing.
 
 ## Milestones 7 and 8: WebAssembly build and web dashboard
 (Done ahead of 5 and 6. The dashboard drives sim + protection; firmware SOC

@@ -1,23 +1,31 @@
 #ifndef API_H
 #define API_H
 
-/* Flat C API over sim + HAL + firmware, exported to JavaScript by the
- * WebAssembly build. Owns one pack plus the firmware state. Each step
- * runs the firmware (protection, SOC, balancing) then advances the sim by
- * one second. Balancing only runs while enabled and no fault is latched. */
+/* Flat C API over the simulated system (see system.h), exported to
+ * JavaScript by the WebAssembly build. Each step runs the firmware
+ * (protection, SOC, balancing) then advances the sim by one second.
+ * Balancing only runs while enabled and no fault is latched. */
 
-#define API_DT_S 1.0
-
-void   api_reset(double soc);
+void   api_reset(double soc);            /* free run, no scenario */
 void   api_set_load(double current_a);   /* positive = discharge */
 void   api_set_ambient(double temp_c);
 void   api_set_cell_soc(int cell, double soc);
-void   api_step(int steps);
+void   api_step(int steps);              /* stops at a scenario's end */
 int    api_clear_faults(void);           /* 1 if cleared */
 void   api_set_balancing(int enabled);   /* on after reset */
 
+/* Scenarios (same table as the CSV runner). */
+int         api_scenario_count(void);
+const char *api_scenario_name(int index);
+const char *api_scenario_desc(int index);
+int         api_start_scenario(int index);   /* 1 on success */
+int         api_scenario_active(void);
+int         api_scenario_done(void);
+double      api_scenario_duration_s(void);
+
 double api_time_s(void);
 double api_load_a(void);
+double api_ambient_c(void);
 double api_current_a(void);
 double api_pack_v(void);
 double api_cell_v(int cell);
@@ -27,6 +35,7 @@ int    api_contactor(void);
 int    api_faults(void);
 double api_soc_est_pct(void);          /* firmware SOC estimate */
 int    api_balance_mask(void);          /* bit i = cell i bleeding */
+int    api_balancing(void);
 int    api_num_cells(void);
 
 #endif

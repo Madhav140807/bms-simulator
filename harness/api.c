@@ -1,20 +1,11 @@
 #include <stddef.h>
 #include "api.h"
-#include "balance.h"
-#include "hal_sim.h"
-#include "pack.h"
-#include "protection.h"
-#include "soc.h"
+#include "scenario.h"
+#include "system.h"
 
-#define CAPACITY_AH 3.0
-#define CELL_R_OHM  0.02
-
-static sim_pack_t pack;
-static prot_t prot;
-static soc_t est;
-static bal_t bal;
-static int balancing = 1;
-static double time_s;
+static bms_sys_t sys;
+static scn_run_t run;
+static int scenario_active;
 
 static int valid_cell(int cell)
 {
@@ -23,78 +14,107 @@ static int valid_cell(int cell)
 
 void api_reset(double soc)
 {
-    sim_pack_init(&pack, CAPACITY_AH, soc, CELL_R_OHM);
-    hal_sim_attach(&pack);
-    protection_init(&prot, NULL);
-    soc_init(&est, NULL);
-    balance_init(&bal, NULL);
-    balancing = 1;
-    time_s = 0.0;
+    sys_init(&sys, soc);
+    scenario_active = 0;
 }
 
 void api_set_load(double current_a)
 {
-    sim_pack_set_current(&pack, current_a);
+    sim_pack_set_current(&sys.pack, current_a);
 }
 
 void api_set_ambient(double temp_c)
 {
-    pack.ambient_c = temp_c;
+    sys.pack.ambient_c = temp_c;
 }
 
 void api_set_cell_soc(int cell, double soc)
 {
-    if (valid_cell(cell)) {
-        pack.cells[cell].soc = soc < 0.0 ? 0.0 : (soc > 1.0 ? 1.0 : soc);
-    }
+    sys_set_cell_soc(&sys, cell, soc);
 }
 
 void api_step(int steps)
 {
     for (int i = 0; i < steps; i++) {
-        protection_step(&prot);
-        soc_step(&est, (uint32_t)(API_DT_S * 1000));
-        balance_step(&bal, balancing && prot.faults == PROT_FAULT_NONE);
-        sim_pack_step(&pack, API_DT_S);
-        time_s += API_DT_S;
+        if (scenario_active && scenario_done(&run, &sys)) {
+            return;
+        }
+        sys_step(&sys);
+        if (scenario_active) {
+            scenario_apply(&run, &sys);
+        }
     }
 }
 
 void api_set_balancing(int enabled)
 {
-    balancing = enabled != 0;
+    sys.balancing = enabled != 0;
 }
 
 int api_clear_faults(void)
 {
-    return protection_clear(&prot) ? 1 : 0;
+    return protection_clear(&sys.prot) ? 1 : 0;
 }
 
-double api_time_s(void)    { return time_s; }
-double api_load_a(void)    { return pack.load_a; }
-double api_current_a(void) { return sim_pack_current(&pack); }
-double api_pack_v(void)    { return sim_pack_voltage(&pack); }
-int    api_contactor(void) { return pack.contactor_closed ? 1 : 0; }
-int    api_faults(void)    { return prot.faults; }
+int api_start_scenario(int index)
+{
+    const scenario_t *scn = scenario_get(index);
+    if (scn == NULL) {
+        return 0;
+    }
+    scenario_start(&run, scn, &sys);
+    scenario_active = 1;
+    return 1;
+}
+
+int api_scenario_count(void)  { return scenario_count(); }
+int api_scenario_active(void) { return scenario_active; }
+int api_scenario_done(void)   { return scenario_active && scenario_done(&run, &sys); }
+
+const char *api_scenario_name(int index)
+{
+    const scenario_t *s = scenario_get(index);
+    return s != NULL ? s->name : "";
+}
+
+const char *api_scenario_desc(int index)
+{
+    const scenario_t *s = scenario_get(index);
+    return s != NULL ? s->desc : "";
+}
+
+double api_scenario_duration_s(void)
+{
+    return scenario_active ? run.scn->duration_s : 0.0;
+}
+
+double api_time_s(void)    { return sys.time_s; }
+double api_load_a(void)    { return sys.pack.load_a; }
+double api_ambient_c(void) { return sys.pack.ambient_c; }
+double api_current_a(void) { return sim_pack_current(&sys.pack); }
+double api_pack_v(void)    { return sim_pack_voltage(&sys.pack); }
+int    api_contactor(void) { return sys.pack.contactor_closed ? 1 : 0; }
+int    api_faults(void)    { return sys.prot.faults; }
 int    api_num_cells(void) { return SIM_PACK_CELLS; }
-int    api_balance_mask(void) { return bal.mask; }
+int    api_balance_mask(void) { return sys.bal.mask; }
+int    api_balancing(void) { return sys.balancing ? 1 : 0; }
 
 double api_soc_est_pct(void)
 {
-    return soc_get(&est) / 100.0;
+    return soc_get(&sys.soc) / 100.0;
 }
 
 double api_cell_v(int cell)
 {
-    return valid_cell(cell) ? sim_cell_voltage(&pack.cells[cell]) : 0.0;
+    return valid_cell(cell) ? sim_cell_voltage(&sys.pack.cells[cell]) : 0.0;
 }
 
 double api_cell_soc(int cell)
 {
-    return valid_cell(cell) ? pack.cells[cell].soc : 0.0;
+    return valid_cell(cell) ? sys.pack.cells[cell].soc : 0.0;
 }
 
 double api_cell_temp_c(int cell)
 {
-    return valid_cell(cell) ? pack.cells[cell].temp_c : 0.0;
+    return valid_cell(cell) ? sys.pack.cells[cell].temp_c : 0.0;
 }
