@@ -154,6 +154,7 @@ the API and dashboard by the later milestones, see their sections.)
   `make test` and `make scenarios` (CSV uploaded as an artifact); job
   `wasm-browser` installs Emscripten 6.0.10 (cached) and Playwright, then
   runs `make test-wasm` and `make test-browser` (screenshots uploaded).
-- `.github/workflows/deploy.yml` (every push to main, or manual): builds the
+- `.github/workflows/deploy.yml`: runs when CI completes on main and only if
+  CI succeeded (or manually); checks out the exact commit CI tested, builds the
   WASM and deploys `web/` to GitHub Pages with actions/deploy-pages.
 - Both lint clean with actionlint 1.7.12.
