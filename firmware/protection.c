@@ -7,6 +7,9 @@ const prot_limits_t PROT_DEFAULT_LIMITS = {
     .oc_dsg_ma = 10000,
     .oc_chg_ma = 3000,
     .ot_dc     = 600,
+    .sense_min_mv = 1000,
+    .sense_max_mv = 5000,
+    .sense_min_dc = -400,
     .debounce  = 3,
 };
 
@@ -22,19 +25,31 @@ void protection_init(prot_t *p, const prot_limits_t *limits)
     hal_set_contactor(true);
 }
 
+static uint8_t check_voltage(const prot_limits_t *lim, uint16_t mv)
+{
+    if (mv < lim->sense_min_mv || mv > lim->sense_max_mv) {
+        return PROT_FAULT_SENSOR;
+    }
+    if (mv > lim->ov_mv) {
+        return PROT_FAULT_OV;
+    }
+    return (mv < lim->uv_mv) ? PROT_FAULT_UV : PROT_FAULT_NONE;
+}
+
+static uint8_t check_temp(const prot_limits_t *lim, int16_t dc)
+{
+    if (dc < lim->sense_min_dc) {
+        return PROT_FAULT_SENSOR;
+    }
+    return (dc > lim->ot_dc) ? PROT_FAULT_OT : PROT_FAULT_NONE;
+}
+
 static uint8_t check_cells(const prot_limits_t *lim, const prot_sample_t *s)
 {
     uint8_t f = PROT_FAULT_NONE;
     for (uint8_t i = 0; i < HAL_NUM_CELLS; i++) {
-        if (s->cell_mv[i] > lim->ov_mv) {
-            f |= PROT_FAULT_OV;
-        }
-        if (s->cell_mv[i] < lim->uv_mv) {
-            f |= PROT_FAULT_UV;
-        }
-        if (s->cell_temp_dc[i] > lim->ot_dc) {
-            f |= PROT_FAULT_OT;
-        }
+        f |= check_voltage(lim, s->cell_mv[i]);
+        f |= check_temp(lim, s->cell_temp_dc[i]);
     }
     return f;
 }

@@ -21,4 +21,8 @@ extern const hal_noise_t HAL_DEFAULT_NOISE;
 /* Enables seeded noise on every read; NULL turns it off (the default). */
 void hal_sim_set_noise(const hal_noise_t *noise, uint32_t seed);
 
+/* Fault injection: an open voltage sense wire makes the cell read 0 mV. */
+void hal_sim_set_sense_open(uint8_t cell, bool open);
+bool hal_sim_sense_open(uint8_t cell);
+
 #endif

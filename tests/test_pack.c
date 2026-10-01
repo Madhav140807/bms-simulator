@@ -117,6 +117,46 @@ static void test_mismatched_cells_drift_apart_under_load(void)
     TEST_ASSERT_TRUE(after != before);
 }
 
+static void test_heater_warms_only_its_cell(void)
+{
+    sim_pack_set_heater(&pack, 1, 3.0);
+    for (int t = 0; t < 600; t++) {
+        sim_pack_step(&pack, 1.0);
+    }
+    TEST_ASSERT_TRUE(pack.cells[1].temp_c > 45.0);
+    TEST_ASSERT_DOUBLE_WITHIN(0.01, 25.0, pack.cells[0].temp_c);
+}
+
+static void test_short_drains_and_heats_its_cell(void)
+{
+    sim_pack_set_short(&pack, 2, 2.0);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 3.74 / 2.0, sim_pack_short_current(&pack, 2));
+    for (int t = 0; t < 600; t++) {
+        sim_pack_step(&pack, 1.0);
+    }
+    TEST_ASSERT_TRUE(pack.cells[2].soc < 0.42);
+    TEST_ASSERT_TRUE(pack.cells[2].temp_c > 60.0);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.5, pack.cells[0].soc);
+}
+
+static void test_open_contactor_does_not_stop_short(void)
+{
+    sim_pack_set_contactor(&pack, false);
+    sim_pack_set_short(&pack, 0, 2.0);
+    sim_pack_step(&pack, 60.0);
+    TEST_ASSERT_TRUE(pack.cells[0].soc < 0.5);
+}
+
+static void test_injection_ignores_bad_cell_and_clears(void)
+{
+    sim_pack_set_heater(&pack, 7, 3.0);
+    sim_pack_set_short(&pack, -1, 2.0);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, sim_pack_short_current(&pack, -1));
+    sim_pack_set_short(&pack, 0, 2.0);
+    sim_pack_set_short(&pack, 0, 0.0);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, sim_pack_short_current(&pack, 0));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -131,5 +171,9 @@ int main(void)
     RUN_TEST(test_mismatch_changes_cells_within_3_sigma);
     RUN_TEST(test_mismatch_is_reproducible);
     RUN_TEST(test_mismatched_cells_drift_apart_under_load);
+    RUN_TEST(test_heater_warms_only_its_cell);
+    RUN_TEST(test_short_drains_and_heats_its_cell);
+    RUN_TEST(test_open_contactor_does_not_stop_short);
+    RUN_TEST(test_injection_ignores_bad_cell_and_clears);
     return UNITY_END();
 }

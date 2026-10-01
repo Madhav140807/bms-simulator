@@ -8,6 +8,7 @@ void sys_init(bms_sys_t *sys, double soc)
     sim_pack_apply_mismatch(&sys->pack, &SIM_DEFAULT_MISMATCH, SYS_MISMATCH_SEED);
     hal_sim_attach(&sys->pack);
     sys_set_noise(true);
+    sys_clear_injections(sys);
     protection_init(&sys->prot, NULL);
     soc_init(&sys->soc, NULL);
     ekf_init(&sys->ekf, NULL);
@@ -49,4 +50,39 @@ double sys_cell_spread_mv(const bms_sys_t *sys)
         hi = v > hi ? v : hi;
     }
     return (hi - lo) * 1000.0;
+}
+
+void sys_inject(bms_sys_t *sys, int cell, unsigned flags, bool on)
+{
+    if (cell < 0 || cell >= SIM_PACK_CELLS) {
+        return;
+    }
+    if (flags & SYS_INJ_HEATER) {
+        sim_pack_set_heater(&sys->pack, cell, on ? SYS_HEATER_W : 0.0);
+    }
+    if (flags & SYS_INJ_SHORT) {
+        sim_pack_set_short(&sys->pack, cell, on ? SYS_SHORT_R_OHM : 0.0);
+    }
+    if (flags & SYS_INJ_SENSOR) {
+        hal_sim_set_sense_open((uint8_t)cell, on);
+    }
+}
+
+unsigned sys_injected(const bms_sys_t *sys, int cell)
+{
+    if (cell < 0 || cell >= SIM_PACK_CELLS) {
+        return 0;
+    }
+    unsigned f = 0;
+    f |= sys->pack.heater_w[cell] > 0.0 ? SYS_INJ_HEATER : 0u;
+    f |= sys->pack.short_r_ohm[cell] > 0.0 ? SYS_INJ_SHORT : 0u;
+    f |= hal_sim_sense_open((uint8_t)cell) ? SYS_INJ_SENSOR : 0u;
+    return f;
+}
+
+void sys_clear_injections(bms_sys_t *sys)
+{
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        sys_inject(sys, i, SYS_INJ_HEATER | SYS_INJ_SHORT | SYS_INJ_SENSOR, false);
+    }
 }

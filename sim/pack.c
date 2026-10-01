@@ -9,6 +9,8 @@ void sim_pack_init(sim_pack_t *pack, double capacity_ah, double soc, double r_oh
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         sim_cell_init(&pack->cells[i], capacity_ah, soc, r_ohm);
         pack->balance_on[i] = false;
+        pack->heater_w[i] = 0.0;
+        pack->short_r_ohm[i] = 0.0;
     }
     pack->balance_r_ohm = DEFAULT_BALANCE_R_OHM;
     pack->contactor_closed = true;
@@ -74,11 +76,41 @@ double sim_pack_balance_current(const sim_pack_t *pack, int cell)
     return sim_ocv_from_soc(pack->cells[cell].soc) / pack->balance_r_ohm;
 }
 
+static int cell_ok(int cell)
+{
+    return cell >= 0 && cell < SIM_PACK_CELLS;
+}
+
+void sim_pack_set_heater(sim_pack_t *pack, int cell, double watts)
+{
+    if (cell_ok(cell)) {
+        pack->heater_w[cell] = watts > 0.0 ? watts : 0.0;
+    }
+}
+
+void sim_pack_set_short(sim_pack_t *pack, int cell, double r_ohm)
+{
+    if (cell_ok(cell)) {
+        pack->short_r_ohm[cell] = r_ohm > 0.0 ? r_ohm : 0.0;
+    }
+}
+
+double sim_pack_short_current(const sim_pack_t *pack, int cell)
+{
+    if (!cell_ok(cell) || pack->short_r_ohm[cell] <= 0.0) {
+        return 0.0;
+    }
+    return sim_ocv_from_soc(pack->cells[cell].soc) / pack->short_r_ohm[cell];
+}
+
 void sim_pack_step(sim_pack_t *pack, double dt_s)
 {
     double string_a = sim_pack_current(pack);
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
-        double cell_a = string_a + sim_pack_balance_current(pack, i);
+        double short_a = sim_pack_short_current(pack, i);
+        double cell_a = string_a + sim_pack_balance_current(pack, i) + short_a;
+        double short_w = short_a * short_a * pack->short_r_ohm[i];
+        pack->cells[i].extra_heat_w = pack->heater_w[i] + short_w;
         sim_cell_step(&pack->cells[i], cell_a, dt_s, pack->ambient_c);
     }
 }

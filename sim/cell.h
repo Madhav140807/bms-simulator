@@ -12,6 +12,7 @@ typedef struct {
     double heat_cap_j_per_c;/* thermal mass */
     double cooling_w_per_c; /* heat transfer to ambient */
     double current_a;       /* current from the last step */
+    double extra_heat_w;    /* heat from outside the I^2*R model */
 } sim_cell_t;
 
 void   sim_cell_init(sim_cell_t *cell, double capacity_ah, double soc, double r_ohm);

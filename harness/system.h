@@ -17,6 +17,13 @@
 #define SYS_DT_MS       1000u
 #define SYS_MISMATCH_SEED 20261001u
 #define SYS_NOISE_SEED    7u
+#define SYS_HEATER_W      3.0   /* "overheat a cell" injection */
+#define SYS_SHORT_R_OHM   2.0   /* "short a cell" injection */
+
+/* Injected faults, bit flags per cell. */
+#define SYS_INJ_HEATER 0x01u
+#define SYS_INJ_SHORT  0x02u
+#define SYS_INJ_SENSOR 0x04u
 
 typedef struct {
     sim_pack_t pack;
@@ -38,5 +45,9 @@ void   sys_step(bms_sys_t *sys);
 void   sys_set_cell_soc(bms_sys_t *sys, int cell, double soc);
 double sys_cell_spread_mv(const bms_sys_t *sys);
 void   sys_set_noise(bool on);
+/* Turns injected faults on a cell on or off (SYS_INJ_* flags). */
+void   sys_inject(bms_sys_t *sys, int cell, unsigned flags, bool on);
+unsigned sys_injected(const bms_sys_t *sys, int cell);
+void   sys_clear_injections(bms_sys_t *sys);
 
 #endif

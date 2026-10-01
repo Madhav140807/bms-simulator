@@ -108,7 +108,7 @@ static void test_sys_disabled_balancing_stays_off(void)
 
 static void test_find_and_get(void)
 {
-    TEST_ASSERT_TRUE(scenario_count() >= 6);
+    TEST_ASSERT_TRUE(scenario_count() >= 9);
     TEST_ASSERT_EQUAL_PTR(scenario_get(0), scenario_find(scenario_get(0)->name));
     TEST_ASSERT_NULL(scenario_find("nope"));
     TEST_ASSERT_NULL(scenario_find(NULL));
@@ -264,6 +264,36 @@ static void test_csv_header_starts_with_time(void)
     TEST_ASSERT_NOT_NULL(strstr(line, ",balance_mask,ekf_soc_pct\n"));
 }
 
+static void test_cell_overheat_trips_ot(void)
+{
+    run_to_end("cell_overheat");
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_OT, sys.prot.faults);
+    TEST_ASSERT_TRUE(sys.pack.cells[1].temp_c > sys.pack.cells[0].temp_c + 20.0);
+}
+
+static void test_internal_short_trips_and_keeps_draining(void)
+{
+    run_to_end("internal_short");
+    TEST_ASSERT_TRUE(sys.prot.faults & PROT_FAULT_OT);
+    TEST_ASSERT_FALSE(sys.pack.contactor_closed);
+    TEST_ASSERT_TRUE(sys.pack.cells[2].soc < sys.pack.cells[0].soc - 0.3);
+}
+
+static void test_sensor_failure_is_not_reported_as_uv(void)
+{
+    run_to_end("sensor_failure");
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_SENSOR, sys.prot.faults);
+}
+
+static void test_sys_init_clears_injections(void)
+{
+    sys_inject(&sys, 0, SYS_INJ_HEATER | SYS_INJ_SHORT | SYS_INJ_SENSOR, true);
+    TEST_ASSERT_EQUAL_UINT(7, sys_injected(&sys, 0));
+    sys_init(&sys, 0.5);
+    TEST_ASSERT_EQUAL_UINT(0, sys_injected(&sys, 0));
+    TEST_ASSERT_EQUAL_UINT(0, sys_injected(&sys, 9));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -287,5 +317,9 @@ int main(void)
     RUN_TEST(test_csv_rows_and_columns);
     RUN_TEST(test_csv_includes_final_row);
     RUN_TEST(test_csv_header_starts_with_time);
+    RUN_TEST(test_cell_overheat_trips_ot);
+    RUN_TEST(test_internal_short_trips_and_keeps_draining);
+    RUN_TEST(test_sensor_failure_is_not_reported_as_uv);
+    RUN_TEST(test_sys_init_clears_injections);
     return UNITY_END();
 }

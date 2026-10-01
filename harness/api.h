@@ -43,6 +43,12 @@ double api_ekf_pct(void);              /* Kalman estimate, lowest cell */
 double api_ekf_sigma_pct(void);        /* its 1 sigma */
 double api_ekf_cell_pct(int cell);
 void   api_corrupt_estimates(double pct);   /* set both estimators to pct */
+
+/* Fault injection, flags: 1 = external heater, 2 = internal short,
+ * 4 = open voltage sense wire. */
+void   api_inject(int cell, int flags, int on);
+int    api_injected(int cell);
+void   api_clear_injections(void);
 int    api_balance_mask(void);          /* bit i = cell i bleeding */
 int    api_balancing(void);
 int    api_num_cells(void);

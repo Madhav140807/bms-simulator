@@ -166,3 +166,18 @@ void api_corrupt_estimates(double pct)
     soc_set(&sys.soc, cpct);
     ekf_set(&sys.ekf, cpct);
 }
+
+void api_inject(int cell, int flags, int on)
+{
+    sys_inject(&sys, cell, (unsigned)flags, on != 0);
+}
+
+int api_injected(int cell)
+{
+    return (int)sys_injected(&sys, cell);
+}
+
+void api_clear_injections(void)
+{
+    sys_clear_injections(&sys);
+}

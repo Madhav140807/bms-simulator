@@ -28,7 +28,8 @@ API_FNS  := reset set_load set_ambient set_cell_soc step clear_faults \
             num_cells soc_est_pct scenario_count scenario_name scenario_desc \
             start_scenario scenario_active scenario_done scenario_duration_s \
             set_noise noise cell_capacity_ah cell_r_mohm cell_meas_mv ekf_pct \
-            ekf_sigma_pct ekf_cell_pct corrupt_estimates
+            ekf_sigma_pct ekf_cell_pct corrupt_estimates inject injected \
+            clear_injections
 comma    := ,
 empty    :=
 space    := $(empty) $(empty)

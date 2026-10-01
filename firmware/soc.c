@@ -42,7 +42,7 @@ uint16_t soc_min_cell_mv(void)
     uint16_t min = UINT16_MAX;
     for (uint8_t i = 0; i < HAL_NUM_CELLS; i++) {
         uint16_t mv = hal_read_cell_mv(i);
-        if (mv < min) {
+        if (cell_mv_plausible(mv) && mv < min) {
             min = mv;
         }
     }

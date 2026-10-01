@@ -146,6 +146,16 @@ static void test_estimate_clamps_to_range(void)
     TEST_ASSERT_EQUAL_UINT16(0, ekf_cell_cpct(&ekf, HAL_NUM_CELLS));
 }
 
+static void test_implausible_reading_is_skipped(void)
+{
+    ekf_set(&ekf, 5000);
+    float var = ekf.var[0];
+    ekf_correct(&ekf, 0, 0, 0);
+    ekf_correct(&ekf, 0, 6000, 0);
+    TEST_ASSERT_EQUAL_UINT16(5000, ekf_cell_cpct(&ekf, 0));
+    TEST_ASSERT_EQUAL_FLOAT(var, ekf.var[0]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -161,5 +171,6 @@ int main(void)
     RUN_TEST(test_sigma_shrinks_with_measurements);
     RUN_TEST(test_pack_is_lowest_cell);
     RUN_TEST(test_estimate_clamps_to_range);
+    RUN_TEST(test_implausible_reading_is_skipped);
     return UNITY_END();
 }

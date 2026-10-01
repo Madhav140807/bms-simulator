@@ -11,7 +11,8 @@
  *   correct    H = dOCV/dSOC, K = P H / (H^2 P + r), x += K (z - h(x))
  * Unlike plain coulomb counting it corrects itself under load, so a wrong
  * starting estimate converges within seconds. The pack SOC is the lowest
- * cell's estimate. Float math (single precision). */
+ * cell's estimate. Implausible voltage readings are skipped (predict only).
+ * Float math (single precision). */
 
 typedef struct {
     uint32_t capacity_mah;  /* nominal cell capacity */

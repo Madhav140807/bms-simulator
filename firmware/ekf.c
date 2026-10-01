@@ -44,6 +44,9 @@ void ekf_predict(ekf_t *e, uint8_t cell, int32_t current_ma, uint32_t dt_ms)
 
 void ekf_correct(ekf_t *e, uint8_t cell, uint16_t mv, int32_t current_ma)
 {
+    if (!cell_mv_plausible(mv)) {
+        return;   /* failed sensor: keep predicting only */
+    }
     float x = e->soc[cell];
     float h = ocv_mv_at(x) - (float)current_ma * e->cfg.r0_mohm / 1000.0f;
     float H = ocv_slope_mv(x);

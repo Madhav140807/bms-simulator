@@ -13,7 +13,8 @@ typedef enum {
     EV_AMBIENT,       /* value = ambient temperature in C */
     EV_CELL_SOC,      /* cell, value = SOC 0..1 */
     EV_CLEAR_FAULTS,
-    EV_BALANCING      /* value != 0 enables balancing */
+    EV_BALANCING,     /* value != 0 enables balancing */
+    EV_INJECT         /* cell, value = SYS_INJ_* flags to turn on (0 clears all) */
 } scn_kind_t;
 
 typedef struct {

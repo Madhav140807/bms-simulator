@@ -26,6 +26,7 @@ void setUp(void)
 
 void tearDown(void)
 {
+    hal_sim_set_sense_open(1, false);
     hal_sim_attach(NULL);
 }
 
@@ -197,6 +198,49 @@ static void test_step_keeps_last_sample(void)
     TEST_ASSERT_EQUAL_INT16(250, prot.last.cell_temp_dc[0]);
 }
 
+static void test_zero_mv_is_sensor_fault_not_uv(void)
+{
+    sample.cell_mv[1] = 0;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_SENSOR, protection_check(lim, &sample));
+}
+
+static void test_over_range_mv_is_sensor_fault_not_ov(void)
+{
+    sample.cell_mv[0] = 5001;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_SENSOR, protection_check(lim, &sample));
+    sample.cell_mv[0] = 4999;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_OV, protection_check(lim, &sample));
+}
+
+static void test_low_but_plausible_mv_is_uv(void)
+{
+    sample.cell_mv[2] = 1000;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_UV, protection_check(lim, &sample));
+}
+
+static void test_open_thermistor_is_sensor_fault(void)
+{
+    sample.cell_temp_dc[3] = -401;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_SENSOR, protection_check(lim, &sample));
+}
+
+static void test_very_hot_reading_is_ot_not_sensor(void)
+{
+    sample.cell_temp_dc[3] = 1500;
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_OT, protection_check(lim, &sample));
+}
+
+static void test_open_sense_wire_trips_and_blocks_clear(void)
+{
+    hal_sim_set_sense_open(1, true);
+    step_n(3);
+    TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_SENSOR, prot.faults);
+    TEST_ASSERT_FALSE(pack.contactor_closed);
+    TEST_ASSERT_FALSE(protection_clear(&prot));
+    hal_sim_set_sense_open(1, false);
+    TEST_ASSERT_TRUE(protection_clear(&prot));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -218,5 +262,11 @@ int main(void)
     RUN_TEST(test_clear_recovers_when_condition_gone);
     RUN_TEST(test_custom_limits);
     RUN_TEST(test_step_keeps_last_sample);
+    RUN_TEST(test_zero_mv_is_sensor_fault_not_uv);
+    RUN_TEST(test_over_range_mv_is_sensor_fault_not_ov);
+    RUN_TEST(test_low_but_plausible_mv_is_uv);
+    RUN_TEST(test_open_thermistor_is_sensor_fault);
+    RUN_TEST(test_very_hot_reading_is_ot_not_sensor);
+    RUN_TEST(test_open_sense_wire_trips_and_blocks_clear);
     return UNITY_END();
 }

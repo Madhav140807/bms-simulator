@@ -5,8 +5,9 @@
 #include <stdint.h>
 #include "hal.h"
 
-/* Pack protection: over/under voltage, over current (discharge and charge)
- * and over temperature. A condition must hold for `debounce` consecutive
+/* Pack protection: over/under voltage, over current (discharge and charge),
+ * over temperature and sensor plausibility. An implausible reading raises
+ * SENSOR instead of OV/UV/OT for that cell. A condition must hold for `debounce` consecutive
  * steps before it trips. Tripped faults latch, open the main contactor and
  * keep it open until cleared with protection_clear(). */
 
@@ -16,7 +17,8 @@
 #define PROT_FAULT_OC_DSG   0x04u  /* discharge current above oc_dsg_ma */
 #define PROT_FAULT_OC_CHG   0x08u  /* charge current above oc_chg_ma */
 #define PROT_FAULT_OT       0x10u  /* any cell above ot_dc */
-#define PROT_NUM_FAULTS     5u
+#define PROT_FAULT_SENSOR   0x20u  /* implausible voltage or temperature reading */
+#define PROT_NUM_FAULTS     6u
 
 typedef enum {
     PROT_STATE_OK = 0,
@@ -29,6 +31,11 @@ typedef struct {
     int32_t  oc_dsg_ma;  /* positive magnitude */
     int32_t  oc_chg_ma;  /* positive magnitude */
     int16_t  ot_dc;
+    uint16_t sense_min_mv;  /* plausible cell voltage reading range */
+    uint16_t sense_max_mv;
+    int16_t  sense_min_dc;  /* colder reads as an open thermistor; hot
+                               readings are never dismissed as sensor
+                               faults, they trip OT */
     uint8_t  debounce;   /* consecutive steps to trip, 0 treated as 1 */
 } prot_limits_t;
 

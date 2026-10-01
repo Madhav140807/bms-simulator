@@ -40,6 +40,7 @@ void     soc_update(soc_t *s, int32_t current_ma, uint16_t min_cell_mv, uint32_t
 /* Reads the HAL and calls soc_update(). */
 void     soc_step(soc_t *s, uint32_t dt_ms);
 
+/* Lowest plausible cell voltage (UINT16_MAX if none is plausible). */
 uint16_t soc_min_cell_mv(void);
 
 #endif

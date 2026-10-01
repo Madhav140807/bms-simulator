@@ -219,6 +219,21 @@ void test_ekf_cell_estimates_follow_cells(void)
     TEST_ASSERT_EQUAL_DOUBLE(0.0, api_ekf_cell_pct(9));
 }
 
+void test_injection_round_trip(void)
+{
+    api_inject(1, 1, 1);
+    api_inject(2, 4, 1);
+    TEST_ASSERT_EQUAL_INT(1, api_injected(1));
+    TEST_ASSERT_EQUAL_INT(4, api_injected(2));
+    api_step(5);
+    TEST_ASSERT_TRUE(api_faults() & PROT_FAULT_SENSOR);
+    TEST_ASSERT_EQUAL_INT(0, api_cell_meas_mv(2));
+    api_clear_injections();
+    TEST_ASSERT_EQUAL_INT(0, api_injected(1) | api_injected(2));
+    api_step(1);
+    TEST_ASSERT_EQUAL_INT(1, api_clear_faults());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -243,5 +258,6 @@ int main(void)
     RUN_TEST(test_reset_leaves_scenario_mode);
     RUN_TEST(test_corrupted_estimates_kalman_recovers_coulomb_does_not);
     RUN_TEST(test_ekf_cell_estimates_follow_cells);
+    RUN_TEST(test_injection_round_trip);
     return UNITY_END();
 }

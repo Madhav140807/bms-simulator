@@ -163,6 +163,13 @@ static void test_custom_config(void)
     TEST_ASSERT_EQUAL_UINT16(4000, soc_get(&soc));
 }
 
+static void test_min_cell_ignores_open_sense_wire(void)
+{
+    hal_sim_set_sense_open(0, true);
+    TEST_ASSERT_TRUE(soc_min_cell_mv() >= 1000);
+    hal_sim_set_sense_open(0, false);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -183,5 +190,6 @@ int main(void)
     RUN_TEST(test_small_current_counts_as_rest);
     RUN_TEST(test_rest_corrects_drifted_estimate);
     RUN_TEST(test_custom_config);
+    RUN_TEST(test_min_cell_ignores_open_sense_wire);
     return UNITY_END();
 }

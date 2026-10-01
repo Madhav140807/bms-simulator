@@ -52,7 +52,7 @@ h1 { font-size: 20px; margin: 0; }
 .controls label { display: block; color: var(--ink-2); font-size: 12px; margin-bottom: 4px; }
 .controls label.check { display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 14px; }
 .controls input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
-.controls .scenario { grid-column: 1 / -1; }
+.controls .scenario, .controls .inject { grid-column: 1 / -1; }
 .controls .note { color: var(--ink-2); font-size: 12px; margin-top: 6px; }
 .tile .note { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
 .controls input[type=range] { width: 100%; accent-color: var(--accent); }
@@ -100,6 +100,17 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
         <button id="start">Start</button>
       </div>
       <div class="note" id="scnNote">Drive the pack with the controls below.</div>
+    </div>
+    <div class="inject">
+      <label for="injCell">Fault injection</label>
+      <div class="row">
+        <select id="injCell"></select>
+        <button id="injHeat" title="3 W external heat source on the cell">Overheat cell</button>
+        <button id="injShort" title="2 Ω internal short: drains and heats the cell, the contactor cannot stop it">Short cell</button>
+        <button id="injSensor" title="Open voltage sense wire: the BMS reads 0 mV">Sensor failure</button>
+        <button id="injClear">Remove injected faults</button>
+      </div>
+      <div class="note" id="injNote">No faults injected.</div>
     </div>
     <div>
       <label for="load">Load current (+ discharge, − charge): <span id="loadVal" class="val"></span></label>
@@ -163,7 +174,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 
   <section class="card table-wrap" aria-label="Cell table">
     <table>
-      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>BMS reads (mV)</th><th>SOC (%)</th><th>Temperature (°C)</th><th>Capacity (Ah)</th><th>R (mΩ)</th><th>Balancing</th></tr></thead>
+      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>BMS reads (mV)</th><th>SOC (%)</th><th>Temperature (°C)</th><th>Capacity (Ah)</th><th>R (mΩ)</th><th>Balancing</th><th>Injected</th></tr></thead>
       <tbody id="cells"></tbody>
     </table>
   </section>
@@ -178,8 +189,10 @@ const MAX_POINTS = 600;  // samples kept per series: one minute of wall time
 const TICK_MS = 100;
 const FAULTS = [
   [0x01, "Over voltage"], [0x02, "Under voltage"], [0x04, "Over current (discharge)"],
-  [0x08, "Over current (charge)"], [0x10, "Over temperature"],
+  [0x08, "Over current (charge)"], [0x10, "Over temperature"], [0x20, "Sensor fault"],
 ];
+const INJECTIONS = [[1, "Heater"], [2, "Internal short"], [4, "Sensor open"]];
+const injectedNames = (flags) => INJECTIONS.filter(([bit]) => flags & bit).map(([, n]) => n);
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -246,8 +259,9 @@ function buildCharts() {
   Object.assign(k[2], { slot: 0, band: true, pointHoverRadius: 0 });
   Object.assign(k[3], { slot: 0, band: true, pointHoverRadius: 0, fill: "-1" });
   Object.assign(k[4], { slot: 0 });
+  $("injCell").innerHTML = cells.map((c, i) => `<option value="${i}">${c}</option>`).join("");
   $("cells").innerHTML = cells.map((c) =>
-    `<tr><td><span class="swatch"></span>${c}</td>${"<td></td>".repeat(7)}</tr>`).join("");
+    `<tr><td><span class="swatch"></span>${c}</td>${"<td></td>".repeat(8)}</tr>`).join("");
   applyTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 }
@@ -298,6 +312,12 @@ function renderStatus(t) {
   $("tSpread").textContent = (Math.max(...mv) - Math.min(...mv)).toFixed(0) + " mV";
   $("tBal").textContent = !$("balancing").checked ? "Balancing disabled"
     : bleeding.length ? "Bleeding cell " + bleeding.join(", ") : "Balancing idle";
+  const inj = [];
+  for (let i = 0; i < NUM_CELLS; i++) {
+    const names = injectedNames(api._api_injected(i));
+    if (names.length) inj.push(`Cell ${i + 1}: ${names.join(", ").toLowerCase()}`);
+  }
+  $("injNote").textContent = inj.length ? "Injected: " + inj.join("; ") : "No faults injected.";
   const rows = $("cells").rows;
   for (let i = 0; i < NUM_CELLS; i++) {
     const cells = rows[i].cells;
@@ -308,6 +328,7 @@ function renderStatus(t) {
     cells[5].textContent = api._api_cell_capacity_ah(i).toFixed(3);
     cells[6].textContent = api._api_cell_r_mohm(i).toFixed(1);
     cells[7].textContent = (mask >> i) & 1 ? "Bleeding" : "–";
+    cells[8].textContent = injectedNames(api._api_injected(i)).join(", ") || "–";
   }
 }
 
@@ -398,6 +419,14 @@ function wire() {
     if (!api._api_clear_faults()) alert("A fault condition is still present; fix it before clearing.");
     sample();
   });
+  const inject = (flag) => () => {
+    api._api_inject(parseInt($("injCell").value, 10), flag, 1);
+    sample();
+  };
+  $("injHeat").addEventListener("click", inject(1));
+  $("injShort").addEventListener("click", inject(2));
+  $("injSensor").addEventListener("click", inject(4));
+  $("injClear").addEventListener("click", () => { api._api_clear_injections(); sample(); });
   $("corrupt").addEventListener("click", () => { api._api_corrupt_estimates(50); sample(); });
   $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });
   $("imbalance").addEventListener("click", () => {

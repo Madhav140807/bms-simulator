@@ -148,6 +148,52 @@ async function checkKalman(p) {
   await p.selectOption("#speed", "60");
 }
 
+// Table row values for one cell (0 based).
+function cellRow(p, i) {
+  return p.$eval(`#cells tr:nth-child(${i + 1})`, (r) => ({
+    meas: parseFloat(r.cells[2].textContent), soc: parseFloat(r.cells[3].textContent),
+    temp: parseFloat(r.cells[4].textContent), injected: r.cells[8].textContent,
+  }));
+}
+
+async function injectOn(p, cell, button) {
+  await p.click("#reset");
+  await p.selectOption("#speed", "60");
+  await setRange(p, "load", 1);
+  await p.selectOption("#injCell", String(cell));
+  await p.click(button);
+}
+
+async function checkFaultInjection(p) {
+  await injectOn(p, 1, "#injHeat");
+  check(/Cell 2: heater/.test(await text(p, "#injNote")), "overheat_button_injects");
+  check(await waitText(p, "#tFaults", /Over temperature/), "overheat_trips_ot");
+  const hot = await cellRow(p, 1), cool = await cellRow(p, 0);
+  check(hot.temp > 60 && hot.temp > cool.temp + 20 && hot.injected === "Heater", "overheat_only_that_cell");
+  await p.screenshot({ path: path.join(shotDir, "inject-overheat.png"), fullPage: true });
+
+  await injectOn(p, 2, "#injShort");
+  check(await waitText(p, "#tFaults", /Over temperature/), "short_trips_ot");
+  await p.waitForTimeout(1500);
+  const shorted = await cellRow(p, 2), healthy = await cellRow(p, 0);
+  check(shorted.soc < healthy.soc - 5 && shorted.injected === "Internal short", "short_drains_that_cell");
+  check(/Open/.test(await text(p, "#tCont")), "short_opens_contactor");
+
+  await injectOn(p, 3, "#injSensor");
+  check(await waitText(p, "#tFaults", /Sensor fault/), "sensor_failure_trips_sensor_fault");
+  check((await cellRow(p, 3)).meas === 0, "sensor_failure_reads_zero");
+  check(!/Under voltage/.test(await text(p, "#tFaults")), "sensor_failure_not_reported_as_uv");
+  await p.screenshot({ path: path.join(shotDir, "inject-sensor.png"), fullPage: true });
+  await p.click("#clear");
+  check(/Fault/.test(await text(p, "#tProt")), "clear_blocked_while_sensor_failed");
+  await p.click("#injClear");
+  check(/No faults injected/.test(await text(p, "#injNote")), "remove_injected_faults");
+  await p.waitForTimeout(300);
+  await p.click("#clear");
+  check(await waitText(p, "#tProt", /OK/), "clear_works_after_removal");
+  await p.click("#reset");
+}
+
 async function checkProtection(p) {
   await setRange(p, "load", 15);
   check(await waitText(p, "#tFaults", /Over current/), "overcurrent_trips");
@@ -178,7 +224,7 @@ async function runScenario(p, name) {
 
 async function checkScenarios(p) {
   const names = await p.$$eval("#scenario option", (os) => os.map((o) => o.textContent));
-  check(names.length === 7, "picker_lists_six_scenarios");
+  check(names.length === 10, "picker_lists_nine_scenarios");
   check(await runScenario(p, "charge"), "charge_finishes");
   check(/Over voltage/.test(await text(p, "#tFaults")), "charge_ends_in_ov");
   check((await text(p, "#run")) === "Run", "scenario_auto_pauses");
@@ -211,6 +257,7 @@ async function main() {
       if (scheme === "light") {
         await checkMismatchAndNoise(p);
         await checkKalman(p);
+        await checkFaultInjection(p);
         await checkProtection(p);
         await checkBalancing(p);
         await checkScenarios(p);

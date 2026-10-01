@@ -36,6 +36,21 @@ static const scn_event_t weak_cell[] = {
     { 0, EV_LOAD, 0, 3.0 },
 };
 
+static const scn_event_t cell_overheat[] = {
+    { 0,   EV_LOAD, 0, 1.0 },
+    { 120, EV_INJECT, 1, SYS_INJ_HEATER },
+};
+
+static const scn_event_t internal_short[] = {
+    { 0,  EV_LOAD, 0, 1.0 },
+    { 60, EV_INJECT, 2, SYS_INJ_SHORT },
+};
+
+static const scn_event_t sensor_failure[] = {
+    { 0,   EV_LOAD, 0, 3.0 },
+    { 300, EV_INJECT, 3, SYS_INJ_SENSOR },
+};
+
 static const scenario_t scenarios[] = {
     { "discharge_1c", "1C discharge from full until under voltage trips, then rest",
       1.0, 4200, discharge_1c, COUNT(discharge_1c) },
@@ -49,6 +64,12 @@ static const scenario_t scenarios[] = {
       0.8, 18000, imbalance, COUNT(imbalance) },
     { "weak_cell", "One cell at 30 % limits a 1C discharge: early under voltage trip",
       1.0, 1800, weak_cell, COUNT(weak_cell) },
+    { "cell_overheat", "A 3 W external heat source on cell 2 until over temperature trips",
+      0.8, 1800, cell_overheat, COUNT(cell_overheat) },
+    { "internal_short", "A 2 ohm internal short in cell 3: it drains and heats until protection trips",
+      0.8, 1800, internal_short, COUNT(internal_short) },
+    { "sensor_failure", "Cell 4 voltage sense wire opens: sensor fault instead of a false under voltage",
+      0.8, 600, sensor_failure, COUNT(sensor_failure) },
 };
 
 int scenario_count(void)
@@ -88,6 +109,13 @@ static void apply_event(const scn_event_t *ev, bms_sys_t *sys)
         break;
     case EV_BALANCING:
         sys->balancing = ev->value != 0.0;
+        break;
+    case EV_INJECT:
+        if (ev->value == 0.0) {
+            sys_clear_injections(sys);
+        } else {
+            sys_inject(sys, ev->cell, (unsigned)ev->value, true);
+        }
         break;
     }
 }

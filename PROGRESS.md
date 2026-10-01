@@ -11,7 +11,7 @@
 8. [x] Web dashboard (HTML/JS + Chart.js)
 9. [x] Sim realism: cell manufacturing mismatch and sensor noise
 10. [x] Firmware: Kalman filter SOC estimation, dashboard chart
-11. [ ] Fault injection (overheat, internal short, sensor failure) + sensor plausibility
+11. [x] Fault injection (overheat, internal short, sensor failure) + sensor plausibility
 12. [ ] Firmware: CAN messages, dashboard CAN log panel
 
 Items 9 to 12 were requested later (the request called them milestones 4 to
@@ -216,3 +216,30 @@ the API and dashboard by the later milestones, see their sections.)
   11 WASM, 37 browser checks (new: chart visible with data, legend, tile,
   tracks truth, recovers from corruption while coulomb counting stays
   wrong). All passing.
+
+## Milestone 11: Fault injection and sensor plausibility
+- Sim: per cell external heater (`sim_pack_set_heater`) and soft internal
+  short (`sim_pack_set_short`): the short drains the cell through R and
+  dissipates V^2/R inside it, and keeps going with the contactor open.
+  HAL sim: `hal_sim_set_sense_open()` makes a cell read 0 mV.
+- System: `sys_inject()` with SYS_INJ_HEATER (3 W), SYS_INJ_SHORT (2 ohm,
+  ~1.9 A, ~7 W), SYS_INJ_SENSOR; `sys_init()` clears them. Scenario event
+  EV_INJECT and three scenarios: `cell_overheat` (OT at ~14 min),
+  `internal_short` (OT at ~5 min, cell keeps draining), `sensor_failure`
+  (SENSOR fault, not UV).
+- Protection: new PROT_FAULT_SENSOR (0x20). Cell readings outside
+  1000..5000 mV raise SENSOR instead of OV/UV; temperatures below -40.0 C
+  (open thermistor) raise SENSOR. Hot readings are never dismissed as
+  sensor faults: a real 128 C cell (seen in `internal_short`) must trip OT.
+  SENSOR latches and cannot be cleared while the reading is implausible.
+- SOC estimators skip implausible readings (`cell_mv_plausible()` in
+  `ocv.h`): coulomb counting's rest correction ignores the cell, the Kalman
+  filter predicts without correcting.
+- Dashboard: Fault injection row (cell picker, Overheat cell, Short cell,
+  Sensor failure, Remove injected faults), status note, Injected column,
+  "Sensor fault" label; scenario picker lists the 3 new scenarios.
+- Tests: 4 pack, 1 HAL, 6 protection, 1 SOC, 1 EKF, 4 scenario/system,
+  1 API. 168 unit tests, 11 WASM (9 scenarios match native), 49 browser
+  checks (new: each injection button trips the right fault on the right
+  cell, sensor failure reads 0 and is not UV, clear is blocked until the
+  injection is removed). All passing.

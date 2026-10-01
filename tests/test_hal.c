@@ -15,6 +15,9 @@ void tearDown(void)
 {
     hal_sim_attach(NULL);
     hal_sim_set_noise(NULL, 0);
+    for (uint8_t i = 0; i < HAL_NUM_CELLS; i++) {
+        hal_sim_set_sense_open(i, false);
+    }
 }
 
 static void test_cell_voltage_in_millivolts(void)
@@ -148,6 +151,18 @@ static void test_noise_is_reproducible_per_seed(void)
     }
 }
 
+static void test_open_sense_wire_reads_zero(void)
+{
+    hal_sim_set_sense_open(2, true);
+    TEST_ASSERT_TRUE(hal_sim_sense_open(2));
+    TEST_ASSERT_EQUAL_UINT16(0, hal_read_cell_mv(2));
+    TEST_ASSERT_EQUAL_UINT16(3740, hal_read_cell_mv(1));
+    hal_sim_set_sense_open(2, false);
+    TEST_ASSERT_EQUAL_UINT16(3740, hal_read_cell_mv(2));
+    hal_sim_set_sense_open(9, true);   /* ignored */
+    TEST_ASSERT_FALSE(hal_sim_sense_open(9));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -164,5 +179,6 @@ int main(void)
     RUN_TEST(test_noise_has_expected_mean_and_sigma);
     RUN_TEST(test_noise_on_current_and_temperature);
     RUN_TEST(test_noise_is_reproducible_per_seed);
+    RUN_TEST(test_open_sense_wire_reads_zero);
     return UNITY_END();
 }

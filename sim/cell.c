@@ -31,6 +31,7 @@ void sim_cell_init(sim_cell_t *cell, double capacity_ah, double soc, double r_oh
     cell->heat_cap_j_per_c = DEFAULT_HEAT_CAP_J_PER_C;
     cell->cooling_w_per_c = DEFAULT_COOLING_W_PER_C;
     cell->current_a = 0.0;
+    cell->extra_heat_w = 0.0;
 }
 
 double sim_ocv_from_soc(double soc)
@@ -51,7 +52,7 @@ double sim_cell_voltage(const sim_cell_t *cell)
 
 static void step_thermal(sim_cell_t *cell, double dt_s, double ambient_c)
 {
-    double heat_w = cell->current_a * cell->current_a * cell->r_ohm;
+    double heat_w = cell->current_a * cell->current_a * cell->r_ohm + cell->extra_heat_w;
     double loss_w = cell->cooling_w_per_c * (cell->temp_c - ambient_c);
     cell->temp_c += (heat_w - loss_w) * dt_s / cell->heat_cap_j_per_c;
 }

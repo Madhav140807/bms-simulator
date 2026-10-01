@@ -10,6 +10,7 @@ static sim_pack_t *sim;
 static hal_noise_t noise;
 static bool noisy;
 static sim_rng_t rng;
+static bool sense_open[HAL_NUM_CELLS];
 
 const hal_noise_t HAL_DEFAULT_NOISE = {
     .cell_mv    = 2.0,
@@ -24,6 +25,18 @@ void hal_sim_set_noise(const hal_noise_t *n, uint32_t seed)
         noise = *n;
         sim_rng_seed(&rng, seed);
     }
+}
+
+void hal_sim_set_sense_open(uint8_t cell, bool open)
+{
+    if (cell < HAL_NUM_CELLS) {
+        sense_open[cell] = open;
+    }
+}
+
+bool hal_sim_sense_open(uint8_t cell)
+{
+    return cell < HAL_NUM_CELLS && sense_open[cell];
 }
 
 static double jitter(double sigma)
@@ -54,7 +67,7 @@ static double clamp(double x, double lo, double hi)
 
 uint16_t hal_read_cell_mv(uint8_t cell)
 {
-    if (!cell_ok(cell)) {
+    if (!cell_ok(cell) || sense_open[cell]) {
         return 0;
     }
     double mv = round(sim_cell_voltage(&sim->cells[cell]) * 1000.0 + jitter(noise.cell_mv));
