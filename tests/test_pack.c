@@ -80,6 +80,43 @@ static void test_balance_ignores_bad_cell_index(void)
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, sim_pack_balance_current(&pack, SIM_PACK_CELLS));
 }
 
+static void test_mismatch_changes_cells_within_3_sigma(void)
+{
+    sim_pack_apply_mismatch(&pack, &SIM_DEFAULT_MISMATCH, 1);
+    int differ = 0;
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        const sim_cell_t *c = &pack.cells[i];
+        TEST_ASSERT_DOUBLE_WITHIN(3.0 * 0.015 * 3.0 + 1e-9, 3.0, c->capacity_ah);
+        TEST_ASSERT_DOUBLE_WITHIN(3.0 * 0.08 * 0.02 + 1e-9, 0.02, c->r_ohm);
+        TEST_ASSERT_DOUBLE_WITHIN(3.0 * 0.005 + 1e-9, 0.5, c->soc);
+        differ += (c->capacity_ah != 3.0);
+    }
+    TEST_ASSERT_EQUAL_INT(SIM_PACK_CELLS, differ);
+}
+
+static void test_mismatch_is_reproducible(void)
+{
+    sim_pack_t other;
+    sim_pack_init(&other, 3.0, 0.5, 0.02);
+    sim_pack_apply_mismatch(&pack, &SIM_DEFAULT_MISMATCH, 9);
+    sim_pack_apply_mismatch(&other, &SIM_DEFAULT_MISMATCH, 9);
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        TEST_ASSERT_EQUAL_DOUBLE(other.cells[i].r_ohm, pack.cells[i].r_ohm);
+    }
+}
+
+static void test_mismatched_cells_drift_apart_under_load(void)
+{
+    sim_pack_apply_mismatch(&pack, &SIM_DEFAULT_MISMATCH, 1);
+    double before = pack.cells[0].soc - pack.cells[1].soc;
+    sim_pack_set_current(&pack, 3.0);
+    for (int t = 0; t < 1800; t++) {
+        sim_pack_step(&pack, 1.0);
+    }
+    double after = pack.cells[0].soc - pack.cells[1].soc;
+    TEST_ASSERT_TRUE(after != before);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -91,5 +128,8 @@ int main(void)
     RUN_TEST(test_open_contactor_stops_load_current);
     RUN_TEST(test_balance_bleeds_only_selected_cell);
     RUN_TEST(test_balance_ignores_bad_cell_index);
+    RUN_TEST(test_mismatch_changes_cells_within_3_sigma);
+    RUN_TEST(test_mismatch_is_reproducible);
+    RUN_TEST(test_mismatched_cells_drift_apart_under_load);
     return UNITY_END();
 }

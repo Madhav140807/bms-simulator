@@ -18,7 +18,7 @@ void test_reset_state(void)
     TEST_ASSERT_EQUAL_INT(1, api_contactor());
     TEST_ASSERT_EQUAL_INT(0, api_faults());
     TEST_ASSERT_EQUAL_INT(4, api_num_cells());
-    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.5, api_cell_soc(0));
+    TEST_ASSERT_DOUBLE_WITHIN(0.016, 0.5, api_cell_soc(0));   /* mismatch: 3 sigma */
 }
 
 void test_pack_voltage_is_sum_of_cells(void)
@@ -97,9 +97,19 @@ void test_hot_ambient_trips_ot(void)
     TEST_ASSERT_TRUE(api_faults() & PROT_FAULT_OT);
 }
 
+/* The pack SOC the firmware estimates: its lowest (limiting) cell. */
+static double min_cell_soc_pct(void)
+{
+    double min = 1.0;
+    for (int i = 0; i < api_num_cells(); i++) {
+        min = api_cell_soc(i) < min ? api_cell_soc(i) : min;
+    }
+    return min * 100.0;
+}
+
 void test_soc_estimate_seeded_from_ocv(void)
 {
-    TEST_ASSERT_DOUBLE_WITHIN(1.0, 50.0, api_soc_est_pct());
+    TEST_ASSERT_DOUBLE_WITHIN(1.5, min_cell_soc_pct(), api_soc_est_pct());
 }
 
 void test_soc_estimate_tracks_discharge(void)
@@ -107,8 +117,8 @@ void test_soc_estimate_tracks_discharge(void)
     api_reset(1.0);
     api_set_load(3.0);
     api_step(600);   /* 0.5 Ah of 3 Ah = 16.7 % */
-    TEST_ASSERT_DOUBLE_WITHIN(0.5, 100.0 - 16.67, api_soc_est_pct());
-    TEST_ASSERT_DOUBLE_WITHIN(1.0, api_cell_soc(0) * 100.0, api_soc_est_pct());
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, 100.0 - 16.67, api_soc_est_pct());
+    TEST_ASSERT_DOUBLE_WITHIN(1.5, min_cell_soc_pct(), api_soc_est_pct());
 }
 
 void test_soc_estimate_corrects_after_rest(void)
@@ -120,8 +130,16 @@ void test_soc_estimate_corrects_after_rest(void)
     TEST_ASSERT_DOUBLE_WITHIN(1.5, 20.0, api_soc_est_pct());
 }
 
+static void set_all_cells(double soc)
+{
+    for (int i = 0; i < api_num_cells(); i++) {
+        api_set_cell_soc(i, soc);
+    }
+}
+
 void test_balancing_bleeds_high_cell_at_rest(void)
 {
+    set_all_cells(0.5);
     api_set_cell_soc(0, 0.6);
     api_step(2);
     TEST_ASSERT_EQUAL_INT(0x01, api_balance_mask());

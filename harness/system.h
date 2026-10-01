@@ -14,6 +14,8 @@
 #define SYS_CAPACITY_AH 3.0
 #define SYS_CELL_R_OHM  0.02
 #define SYS_DT_MS       1000u
+#define SYS_MISMATCH_SEED 20261001u
+#define SYS_NOISE_SEED    7u
 
 typedef struct {
     sim_pack_t pack;
@@ -24,11 +26,14 @@ typedef struct {
     uint32_t   time_s;
 } bms_sys_t;
 
-/* Initialises every cell at `soc`, attaches the HAL and starts the firmware. */
+/* Initialises every cell at `soc` with the default manufacturing mismatch,
+ * attaches the HAL with sensor noise on, and starts the firmware.
+ * Both are seeded, so every run is reproducible. */
 void   sys_init(bms_sys_t *sys, double soc);
 /* One second: run protection, SOC and balancing, then advance the sim. */
 void   sys_step(bms_sys_t *sys);
 void   sys_set_cell_soc(bms_sys_t *sys, int cell, double soc);
 double sys_cell_spread_mv(const bms_sys_t *sys);
+void   sys_set_noise(bool on);
 
 #endif

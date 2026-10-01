@@ -43,6 +43,7 @@ typedef struct {
     prot_state_t  state;
     uint8_t       faults;  /* latched PROT_FAULT_* bits */
     uint8_t       counts[PROT_NUM_FAULTS];
+    prot_sample_t last;    /* most recent sample checked */
 } prot_t;
 
 extern const prot_limits_t PROT_DEFAULT_LIMITS;

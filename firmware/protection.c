@@ -18,6 +18,7 @@ void protection_init(prot_t *p, const prot_limits_t *limits)
     for (uint8_t i = 0; i < PROT_NUM_FAULTS; i++) {
         p->counts[i] = 0;
     }
+    protection_read_sample(&p->last);
     hal_set_contactor(true);
 }
 
@@ -86,6 +87,7 @@ static uint8_t debounce(prot_t *p, uint8_t active)
 
 void protection_update(prot_t *p, const prot_sample_t *s)
 {
+    p->last = *s;
     p->faults |= debounce(p, protection_check(&p->limits, s));
     if (p->faults != PROT_FAULT_NONE) {
         p->state = PROT_STATE_FAULT;

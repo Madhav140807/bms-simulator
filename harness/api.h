@@ -13,6 +13,7 @@ void   api_set_cell_soc(int cell, double soc);
 void   api_step(int steps);              /* stops at a scenario's end */
 int    api_clear_faults(void);           /* 1 if cleared */
 void   api_set_balancing(int enabled);   /* on after reset */
+void   api_set_noise(int enabled);       /* sensor noise, on after reset */
 
 /* Scenarios (same table as the CSV runner). */
 int         api_scenario_count(void);
@@ -31,6 +32,10 @@ double api_pack_v(void);
 double api_cell_v(int cell);
 double api_cell_soc(int cell);
 double api_cell_temp_c(int cell);
+double api_cell_capacity_ah(int cell);   /* differs per cell (mismatch) */
+double api_cell_r_mohm(int cell);
+int    api_cell_meas_mv(int cell);       /* last HAL reading used by protection */
+int    api_noise(void);
 int    api_contactor(void);
 int    api_faults(void);
 double api_soc_est_pct(void);          /* firmware SOC estimate */

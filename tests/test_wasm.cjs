@@ -25,7 +25,10 @@ function nativeFinalRow(name) {
 createBms().then((m) => {
   m._api_reset(0.5);
   check(m._api_num_cells() === 4, "four_cells");
-  check(Math.abs(m._api_soc_est_pct() - 50) < 1, "soc_estimate_seeded");
+  const minSoc = Math.min(...[0, 1, 2, 3].map((i) => m._api_cell_soc(i))) * 100;
+  check(Math.abs(m._api_soc_est_pct() - minSoc) < 1.5, "soc_estimate_seeded");
+  const caps = new Set([0, 1, 2, 3].map((i) => m._api_cell_capacity_ah(i)));
+  check(caps.size === 4, "cells_are_mismatched");
   m._api_set_load(3);
   m._api_step(60);
   check(m._api_time_s() === 60 && m._api_cell_soc(0) < 0.5, "discharge_steps");

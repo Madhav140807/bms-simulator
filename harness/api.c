@@ -6,6 +6,7 @@
 static bms_sys_t sys;
 static scn_run_t run;
 static int scenario_active;
+static int noise_on;
 
 static int valid_cell(int cell)
 {
@@ -16,6 +17,7 @@ void api_reset(double soc)
 {
     sys_init(&sys, soc);
     scenario_active = 0;
+    noise_on = 1;
 }
 
 void api_set_load(double current_a)
@@ -51,6 +53,14 @@ void api_set_balancing(int enabled)
     sys.balancing = enabled != 0;
 }
 
+void api_set_noise(int enabled)
+{
+    noise_on = enabled != 0;
+    sys_set_noise(noise_on);
+}
+
+int api_noise(void) { return noise_on; }
+
 int api_clear_faults(void)
 {
     return protection_clear(&sys.prot) ? 1 : 0;
@@ -64,6 +74,7 @@ int api_start_scenario(int index)
     }
     scenario_start(&run, scn, &sys);
     scenario_active = 1;
+    noise_on = 1;
     return 1;
 }
 
@@ -117,4 +128,19 @@ double api_cell_soc(int cell)
 double api_cell_temp_c(int cell)
 {
     return valid_cell(cell) ? sys.pack.cells[cell].temp_c : 0.0;
+}
+
+double api_cell_capacity_ah(int cell)
+{
+    return valid_cell(cell) ? sys.pack.cells[cell].capacity_ah : 0.0;
+}
+
+double api_cell_r_mohm(int cell)
+{
+    return valid_cell(cell) ? sys.pack.cells[cell].r_ohm * 1000.0 : 0.0;
+}
+
+int api_cell_meas_mv(int cell)
+{
+    return valid_cell(cell) ? sys.prot.last.cell_mv[cell] : 0;
 }

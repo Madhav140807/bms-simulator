@@ -26,7 +26,8 @@ API_FNS  := reset set_load set_ambient set_cell_soc step clear_faults \
             set_balancing balancing balance_mask time_s load_a ambient_c \
             current_a pack_v cell_v cell_soc cell_temp_c contactor faults \
             num_cells soc_est_pct scenario_count scenario_name scenario_desc \
-            start_scenario scenario_active scenario_done scenario_duration_s
+            start_scenario scenario_active scenario_done scenario_duration_s \
+            set_noise noise cell_capacity_ah cell_r_mohm cell_meas_mv
 comma    := ,
 empty    :=
 space    := $(empty) $(empty)

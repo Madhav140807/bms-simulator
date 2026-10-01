@@ -9,6 +9,13 @@
 6. [x] Harness: scenario runner wiring sim + HAL + firmware, CSV output
 7. [x] WebAssembly build (Emscripten)
 8. [x] Web dashboard (HTML/JS + Chart.js)
+9. [x] Sim realism: cell manufacturing mismatch and sensor noise
+10. [ ] Firmware: Kalman filter SOC estimation, dashboard chart
+11. [ ] Fault injection (overheat, internal short, sensor failure) + sensor plausibility
+12. [ ] Firmware: CAN messages, dashboard CAN log panel
+
+Items 9 to 12 were requested later (the request called them milestones 4 to
+6, which here were already SOC, balancing and the scenario runner).
 
 ## Milestone 1: Build system and sim model
 - Makefile: `make` builds `build/bms`, `make test` runs all `tests/test_*.c`,
@@ -158,3 +165,31 @@ the API and dashboard by the later milestones, see their sections.)
   CI succeeded (or manually); checks out the exact commit CI tested, builds the
   WASM and deploys `web/` to GitHub Pages with actions/deploy-pages.
 - Both lint clean with actionlint 1.7.12.
+
+## Milestone 9: Cell mismatch and sensor noise
+- `sim/rng.c`: seeded xorshift32; gaussian as sum of 12 uniforms (no libm,
+  so native and WASM draw identical numbers).
+- `sim_pack_apply_mismatch()`: per cell capacity (sigma 1.5 %), resistance
+  (8 %) and start SOC (0.5 points), clamped to 3 sigma. `sim_pack_init()`
+  still makes identical cells.
+- `hal_sim_set_noise()`: gaussian noise on every HAL read (2 mV, 10 mA,
+  0.1 C). Off by default at the HAL level; 10 mA keeps SOC rest detection
+  (|I| <= 50 mA for 5 min) working.
+- `sys_init()` applies both with fixed seeds, so runs stay reproducible.
+  `protection` keeps its last sample (`prot_t.last`), which the dashboard
+  shows as "BMS reads" without drawing extra noise samples.
+- Bugs found by the noise and fixed:
+  - `soc_step()` read current and voltage as two function arguments; C
+    leaves the order unspecified, so GCC and clang drew noise differently
+    and WASM diverged from native. Now separate statements.
+  - Balancing chattered (635 bleeder switches in `imbalance`) and stopped
+    ~9.5 mV short. Balancing now filters cell voltages (EMA 1/8, fixed point)
+    and adds back the bleed sag of bleeding cells (`bleed_sag_mv` = 2):
+    4 switches, final spread 7.6 mV with noise, 5.9 mV without.
+- Dashboard: "Sensor noise" toggle; table shows true voltage, what the BMS
+  reads, capacity and resistance per cell.
+- Tests: 5 RNG, 3 pack mismatch, 4 HAL noise, 1 protection, 5 balancing
+  (filter, chatter, sag), 2 system; SOC tests now compare against the lowest
+  true cell. 135 unit tests, 11 WASM, 30 browser checks (new: capacities
+  differ, voltages differ, readings scatter with noise and match truth
+  without). All passing.

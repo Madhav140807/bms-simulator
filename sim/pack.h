@@ -2,6 +2,7 @@
 #define SIM_PACK_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "cell.h"
 
 /* Series string of cells sharing one pack current, with a main contactor
@@ -18,7 +19,20 @@ typedef struct {
     double ambient_c;
 } sim_pack_t;
 
+/* Manufacturing spread between cells, as one standard deviation in percent
+ * of the nominal value (SOC spread in percentage points). */
+typedef struct {
+    double capacity_pct;
+    double r_pct;
+    double soc_pct;
+} sim_mismatch_t;
+
+extern const sim_mismatch_t SIM_DEFAULT_MISMATCH;
+
+/* Every cell starts identical. */
 void   sim_pack_init(sim_pack_t *pack, double capacity_ah, double soc, double r_ohm);
+/* Randomly perturbs each cell (seeded, clamped to +-3 sigma). */
+void   sim_pack_apply_mismatch(sim_pack_t *pack, const sim_mismatch_t *m, uint32_t seed);
 void   sim_pack_set_current(sim_pack_t *pack, double current_a);
 void   sim_pack_set_contactor(sim_pack_t *pack, bool closed);
 void   sim_pack_set_balance(sim_pack_t *pack, int cell, bool on);

@@ -84,6 +84,35 @@ async function checkLoads(p, scheme) {
   await p.screenshot({ path: path.join(shotDir, `${scheme}.png`), fullPage: true });
 }
 
+// Per cell rows of the table: true voltage (mV), BMS reading (mV), capacity (Ah).
+function cellRows(p) {
+  return p.$$eval("#cells tr", (rows) => rows.map((r) => ({
+    trueMv: parseFloat(r.cells[1].textContent) * 1000,
+    measMv: parseFloat(r.cells[2].textContent),
+    capAh: parseFloat(r.cells[5].textContent),
+  })));
+}
+
+// Largest |BMS reading - true voltage| seen over several refreshes.
+async function maxReadingError(p, samples) {
+  let max = 0;
+  for (let i = 0; i < samples; i++) {
+    await p.waitForTimeout(150);
+    for (const r of await cellRows(p)) max = Math.max(max, Math.abs(r.measMv - r.trueMv));
+  }
+  return max;
+}
+
+async function checkMismatchAndNoise(p) {
+  const rows = await cellRows(p);
+  check(new Set(rows.map((r) => r.capAh)).size === 4, "cell_capacities_differ");
+  check(new Set(rows.map((r) => r.trueMv.toFixed(1))).size > 1, "cell_voltages_differ");
+  check(await maxReadingError(p, 10) >= 2, "noise_on_readings_scatter");
+  await p.uncheck("#noise");
+  check(await maxReadingError(p, 10) <= 1.5, "noise_off_readings_match_truth");
+  await p.check("#noise");
+}
+
 async function checkProtection(p) {
   await setRange(p, "load", 15);
   check(await waitText(p, "#tFaults", /Over current/), "overcurrent_trips");
@@ -145,6 +174,7 @@ async function main() {
       const p = await openPage(browser, url, scheme, errors);
       await checkLoads(p, scheme);
       if (scheme === "light") {
+        await checkMismatchAndNoise(p);
         await checkProtection(p);
         await checkBalancing(p);
         await checkScenarios(p);

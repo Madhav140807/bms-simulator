@@ -1,4 +1,5 @@
 #include "pack.h"
+#include "rng.h"
 
 #define DEFAULT_AMBIENT_C     25.0
 #define DEFAULT_BALANCE_R_OHM 33.0
@@ -13,6 +14,33 @@ void sim_pack_init(sim_pack_t *pack, double capacity_ah, double soc, double r_oh
     pack->contactor_closed = true;
     pack->load_a = 0.0;
     pack->ambient_c = DEFAULT_AMBIENT_C;
+}
+
+const sim_mismatch_t SIM_DEFAULT_MISMATCH = {
+    .capacity_pct = 1.5,
+    .r_pct        = 8.0,
+    .soc_pct      = 0.5,
+};
+
+/* One gaussian draw scaled by sigma, clamped to +-3 sigma. */
+static double spread(sim_rng_t *rng, double sigma)
+{
+    double g = sim_rng_gauss(rng);
+    g = g > 3.0 ? 3.0 : (g < -3.0 ? -3.0 : g);
+    return g * sigma;
+}
+
+void sim_pack_apply_mismatch(sim_pack_t *pack, const sim_mismatch_t *m, uint32_t seed)
+{
+    sim_rng_t rng;
+    sim_rng_seed(&rng, seed);
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        sim_cell_t *c = &pack->cells[i];
+        c->capacity_ah *= 1.0 + spread(&rng, m->capacity_pct) / 100.0;
+        c->r_ohm *= 1.0 + spread(&rng, m->r_pct) / 100.0;
+        double soc = c->soc + spread(&rng, m->soc_pct) / 100.0;
+        c->soc = soc < 0.0 ? 0.0 : (soc > 1.0 ? 1.0 : soc);
+    }
 }
 
 void sim_pack_set_current(sim_pack_t *pack, double current_a)

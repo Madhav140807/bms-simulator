@@ -2,10 +2,34 @@
 #include <stddef.h>
 #include "hal.h"
 #include "hal_sim.h"
+#include "rng.h"
 
 _Static_assert(HAL_NUM_CELLS == SIM_PACK_CELLS, "HAL and sim cell counts differ");
 
 static sim_pack_t *sim;
+static hal_noise_t noise;
+static bool noisy;
+static sim_rng_t rng;
+
+const hal_noise_t HAL_DEFAULT_NOISE = {
+    .cell_mv    = 2.0,
+    .current_ma = 10.0,
+    .temp_c     = 0.1,
+};
+
+void hal_sim_set_noise(const hal_noise_t *n, uint32_t seed)
+{
+    noisy = (n != NULL);
+    if (noisy) {
+        noise = *n;
+        sim_rng_seed(&rng, seed);
+    }
+}
+
+static double jitter(double sigma)
+{
+    return noisy ? sim_rng_gauss(&rng) * sigma : 0.0;
+}
 
 void hal_sim_attach(sim_pack_t *pack)
 {
@@ -33,7 +57,7 @@ uint16_t hal_read_cell_mv(uint8_t cell)
     if (!cell_ok(cell)) {
         return 0;
     }
-    double mv = round(sim_cell_voltage(&sim->cells[cell]) * 1000.0);
+    double mv = round(sim_cell_voltage(&sim->cells[cell]) * 1000.0 + jitter(noise.cell_mv));
     return (uint16_t)clamp(mv, 0.0, UINT16_MAX);
 }
 
@@ -42,7 +66,7 @@ int32_t hal_read_pack_current_ma(void)
     if (sim == NULL) {
         return 0;
     }
-    double ma = round(sim_pack_current(sim) * 1000.0);
+    double ma = round(sim_pack_current(sim) * 1000.0 + jitter(noise.current_ma));
     return (int32_t)clamp(ma, INT32_MIN, INT32_MAX);
 }
 
@@ -51,7 +75,7 @@ int16_t hal_read_cell_temp_dc(uint8_t cell)
     if (!cell_ok(cell)) {
         return 0;
     }
-    double dc = round(sim->cells[cell].temp_c * 10.0);
+    double dc = round((sim->cells[cell].temp_c + jitter(noise.temp_c)) * 10.0);
     return (int16_t)clamp(dc, INT16_MIN, INT16_MAX);
 }
 

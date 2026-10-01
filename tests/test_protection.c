@@ -188,6 +188,15 @@ static void test_custom_limits(void)
     TEST_ASSERT_EQUAL_HEX8(PROT_FAULT_OC_DSG, prot.faults);
 }
 
+static void test_step_keeps_last_sample(void)
+{
+    pack.cells[3].soc = 0.55;
+    protection_step(&prot);
+    TEST_ASSERT_EQUAL_UINT16(3780, prot.last.cell_mv[3]);
+    TEST_ASSERT_EQUAL_UINT16(3740, prot.last.cell_mv[0]);
+    TEST_ASSERT_EQUAL_INT16(250, prot.last.cell_temp_dc[0]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -208,5 +217,6 @@ int main(void)
     RUN_TEST(test_clear_refused_while_condition_present);
     RUN_TEST(test_clear_recovers_when_condition_gone);
     RUN_TEST(test_custom_limits);
+    RUN_TEST(test_step_keeps_last_sample);
     return UNITY_END();
 }

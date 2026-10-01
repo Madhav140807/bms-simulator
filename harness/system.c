@@ -5,7 +5,9 @@
 void sys_init(bms_sys_t *sys, double soc)
 {
     sim_pack_init(&sys->pack, SYS_CAPACITY_AH, soc, SYS_CELL_R_OHM);
+    sim_pack_apply_mismatch(&sys->pack, &SIM_DEFAULT_MISMATCH, SYS_MISMATCH_SEED);
     hal_sim_attach(&sys->pack);
+    sys_set_noise(true);
     protection_init(&sys->prot, NULL);
     soc_init(&sys->soc, NULL);
     balance_init(&sys->bal, NULL);
@@ -21,6 +23,11 @@ void sys_step(bms_sys_t *sys)
     balance_step(&sys->bal, sys->balancing && sys->prot.faults == PROT_FAULT_NONE);
     sim_pack_step(&sys->pack, SYS_DT_MS / 1000.0);
     sys->time_s++;
+}
+
+void sys_set_noise(bool on)
+{
+    hal_sim_set_noise(on ? &HAL_DEFAULT_NOISE : NULL, SYS_NOISE_SEED);
 }
 
 void sys_set_cell_soc(bms_sys_t *sys, int cell, double soc)

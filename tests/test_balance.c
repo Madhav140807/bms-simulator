@@ -179,6 +179,70 @@ static void test_discharge_does_not_balance(void)
     TEST_ASSERT_EQUAL_HEX8(0x00, bal.mask);
 }
 
+static void test_filter_primes_with_first_sample(void)
+{
+    set_sample(3800, 3850, 3700, 3900);
+    balance_filter(&bal, &sample);
+    TEST_ASSERT_EQUAL_UINT16(3850, sample.cell_mv[1]);
+    TEST_ASSERT_EQUAL_UINT16(3700, sample.cell_mv[2]);
+}
+
+static void test_filter_smooths_a_single_spike(void)
+{
+    set_sample(3800, 3800, 3800, 3800);
+    balance_filter(&bal, &sample);
+    set_sample(3800, 3880, 3800, 3800);   /* one 80 mV glitch */
+    balance_filter(&bal, &sample);
+    TEST_ASSERT_EQUAL_UINT16(3810, sample.cell_mv[1]);
+}
+
+static void test_filter_converges_to_a_step(void)
+{
+    set_sample(3800, 3800, 3800, 3800);
+    balance_filter(&bal, &sample);
+    for (int i = 0; i < 80; i++) {
+        set_sample(3800, 3840, 3800, 3800);
+        balance_filter(&bal, &sample);
+    }
+    TEST_ASSERT_UINT16_WITHIN(1, 3840, sample.cell_mv[1]);
+}
+
+static void test_noise_does_not_chatter_bleeders(void)
+{
+    pack.cells[0].soc = 0.60;
+    hal_sim_set_noise(&HAL_DEFAULT_NOISE, 3);
+    int changes = 0;
+    uint8_t prev = 0;
+    for (int t = 0; t < 6 * 3600; t++) {
+        balance_step(&bal, true);
+        sim_pack_step(&pack, 1.0);
+        changes += (bal.mask != prev);
+        prev = bal.mask;
+    }
+    hal_sim_set_noise(NULL, 0);
+    TEST_ASSERT_TRUE(changes <= 6);
+    TEST_ASSERT_TRUE(cell_spread_mv() < 8.0);
+}
+
+static void test_bleed_sag_is_compensated(void)
+{
+    /* Cell 1 bleeding, reads 4 mV above min: with 2 mV sag added back it is
+     * 6 mV above, still over stop_mv, so it keeps bleeding. */
+    set_sample(3800, 3820, 3800, 3800);
+    balance_update(&bal, &sample, true);
+    TEST_ASSERT_EQUAL_HEX8(0x02, bal.mask);
+    for (int i = 0; i < 100; i++) {
+        set_sample(3800, 3804, 3800, 3800);
+        balance_update(&bal, &sample, true);
+    }
+    TEST_ASSERT_EQUAL_HEX8(0x02, bal.mask);
+    for (int i = 0; i < 100; i++) {
+        set_sample(3800, 3802, 3800, 3800);
+        balance_update(&bal, &sample, true);
+    }
+    TEST_ASSERT_EQUAL_HEX8(0x00, bal.mask);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -199,5 +263,10 @@ int main(void)
     RUN_TEST(test_step_reads_sim);
     RUN_TEST(test_imbalanced_pack_converges_at_rest);
     RUN_TEST(test_discharge_does_not_balance);
+    RUN_TEST(test_filter_primes_with_first_sample);
+    RUN_TEST(test_filter_smooths_a_single_spike);
+    RUN_TEST(test_filter_converges_to_a_step);
+    RUN_TEST(test_noise_does_not_chatter_bleeders);
+    RUN_TEST(test_bleed_sag_is_compensated);
     return UNITY_END();
 }

@@ -1,3 +1,4 @@
+#include <math.h>
 #include "unity.h"
 #include "hal.h"
 #include "hal_sim.h"
@@ -13,6 +14,7 @@ void setUp(void)
 void tearDown(void)
 {
     hal_sim_attach(NULL);
+    hal_sim_set_noise(NULL, 0);
 }
 
 static void test_cell_voltage_in_millivolts(void)
@@ -96,6 +98,56 @@ static void test_detached_hal_is_safe(void)
     TEST_ASSERT_TRUE(pack.contactor_closed);
 }
 
+static void test_noise_off_by_default_is_exact(void)
+{
+    for (int i = 0; i < 20; i++) {
+        TEST_ASSERT_EQUAL_UINT16(3740, hal_read_cell_mv(0));
+    }
+}
+
+static void test_noise_has_expected_mean_and_sigma(void)
+{
+    hal_sim_set_noise(&HAL_DEFAULT_NOISE, 5);
+    double sum = 0.0, sq = 0.0;
+    const int n = 5000;
+    for (int i = 0; i < n; i++) {
+        double e = hal_read_cell_mv(1) - 3740.0;
+        sum += e;
+        sq += e * e;
+    }
+    double mean = sum / n;
+    TEST_ASSERT_DOUBLE_WITHIN(0.15, 0.0, mean);
+    TEST_ASSERT_DOUBLE_WITHIN(0.3, 2.0, sqrt(sq / n - mean * mean));
+}
+
+static void test_noise_on_current_and_temperature(void)
+{
+    hal_sim_set_noise(&HAL_DEFAULT_NOISE, 5);
+    sim_pack_set_current(&pack, 1.0);
+    int cur_differ = 0, temp_differ = 0;
+    for (int i = 0; i < 100; i++) {
+        int32_t ma = hal_read_pack_current_ma();
+        TEST_ASSERT_INT32_WITHIN(60, 1000, ma);
+        cur_differ += (ma != 1000);
+        temp_differ += (hal_read_cell_temp_dc(0) != 250);
+    }
+    TEST_ASSERT_TRUE(cur_differ > 50);
+    TEST_ASSERT_TRUE(temp_differ > 20);
+}
+
+static void test_noise_is_reproducible_per_seed(void)
+{
+    uint16_t a[10];
+    hal_sim_set_noise(&HAL_DEFAULT_NOISE, 11);
+    for (int i = 0; i < 10; i++) {
+        a[i] = hal_read_cell_mv(2);
+    }
+    hal_sim_set_noise(&HAL_DEFAULT_NOISE, 11);
+    for (int i = 0; i < 10; i++) {
+        TEST_ASSERT_EQUAL_UINT16(a[i], hal_read_cell_mv(2));
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -108,5 +160,9 @@ int main(void)
     RUN_TEST(test_balance_control);
     RUN_TEST(test_out_of_range_cell_is_safe);
     RUN_TEST(test_detached_hal_is_safe);
+    RUN_TEST(test_noise_off_by_default_is_exact);
+    RUN_TEST(test_noise_has_expected_mean_and_sigma);
+    RUN_TEST(test_noise_on_current_and_temperature);
+    RUN_TEST(test_noise_is_reproducible_per_seed);
     return UNITY_END();
 }

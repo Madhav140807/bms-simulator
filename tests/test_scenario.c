@@ -3,6 +3,7 @@
 #include "csv.h"
 #include "scenario.h"
 #include "system.h"
+#include "hal.h"
 
 static bms_sys_t sys;
 static scn_run_t run;
@@ -44,7 +45,7 @@ static void test_sys_init_state(void)
     TEST_ASSERT_EQUAL_UINT32(0, sys.time_s);
     TEST_ASSERT_TRUE(sys.balancing);
     TEST_ASSERT_TRUE(sys.pack.contactor_closed);
-    TEST_ASSERT_DOUBLE_WITHIN(1.0, 50.0, soc_get(&sys.soc) / 100.0);
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, 50.0, soc_get(&sys.soc) / 100.0);   /* lowest mismatched cell + noise */
 }
 
 static void test_sys_step_advances_one_second(void)
@@ -57,13 +58,43 @@ static void test_sys_step_advances_one_second(void)
 
 static void test_sys_spread(void)
 {
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        sys_set_cell_soc(&sys, i, 0.5);
+    }
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.0, sys_cell_spread_mv(&sys));
     sys_set_cell_soc(&sys, 1, 0.6);
     TEST_ASSERT_TRUE(sys_cell_spread_mv(&sys) > 30.0);
 }
 
+static void test_sys_cells_are_mismatched(void)
+{
+    bms_sys_t other;
+    const sim_cell_t *c = sys.pack.cells;
+    TEST_ASSERT_TRUE(c[0].capacity_ah != c[1].capacity_ah);
+    TEST_ASSERT_TRUE(c[0].r_ohm != c[1].r_ohm);
+    sys_init(&other, 0.5);   /* same seed, same pack */
+    TEST_ASSERT_EQUAL_DOUBLE(c[2].capacity_ah, other.pack.cells[2].capacity_ah);
+}
+
+static void test_sys_measurements_are_noisy(void)
+{
+    double truth = sim_cell_voltage(&sys.pack.cells[0]) * 1000.0;
+    int differ = 0;
+    for (int i = 0; i < 50; i++) {
+        uint16_t mv = hal_read_cell_mv(0);
+        TEST_ASSERT_DOUBLE_WITHIN(13.0, truth, mv);
+        differ += (mv != hal_read_cell_mv(0));
+    }
+    TEST_ASSERT_TRUE(differ > 10);
+    sys_set_noise(false);
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)(truth + 0.5), hal_read_cell_mv(0));
+}
+
 static void test_sys_disabled_balancing_stays_off(void)
 {
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        sys_set_cell_soc(&sys, i, 0.5);
+    }
     sys_set_cell_soc(&sys, 1, 0.6);
     sys.balancing = false;
     sys_step(&sys);
@@ -220,6 +251,8 @@ int main(void)
     RUN_TEST(test_sys_init_state);
     RUN_TEST(test_sys_step_advances_one_second);
     RUN_TEST(test_sys_spread);
+    RUN_TEST(test_sys_cells_are_mismatched);
+    RUN_TEST(test_sys_measurements_are_noisy);
     RUN_TEST(test_sys_disabled_balancing_stays_off);
     RUN_TEST(test_find_and_get);
     RUN_TEST(test_table_is_well_formed);

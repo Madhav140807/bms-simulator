@@ -87,7 +87,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 <main>
   <header>
     <h1>BMS Simulator</h1>
-    <span class="sub">4S NMC pack, 3 Ah cells. C firmware running as WebAssembly.</span>
+    <span class="sub">4S NMC pack, 3 Ah nominal cells with manufacturing spread. C firmware running as WebAssembly.</span>
   </header>
   <div id="error" class="card"></div>
 
@@ -123,6 +123,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
     <div>
       <label>Firmware</label>
       <label class="check"><input id="balancing" type="checkbox" checked> Passive balancing enabled</label>
+      <label class="check"><input id="noise" type="checkbox" checked> Sensor noise (σ 2 mV, 10 mA, 0.1 °C)</label>
     </div>
     <div>
       <label>Actions</label>
@@ -158,7 +159,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 
   <section class="card table-wrap" aria-label="Cell table">
     <table>
-      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>SOC (%)</th><th>Temperature (°C)</th><th>Balancing</th></tr></thead>
+      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>BMS reads (mV)</th><th>SOC (%)</th><th>Temperature (°C)</th><th>Capacity (Ah)</th><th>R (mΩ)</th><th>Balancing</th></tr></thead>
       <tbody id="cells"></tbody>
     </table>
   </section>
@@ -231,7 +232,7 @@ function buildCharts() {
   charts.temp = lineChart($("cTemp"), cells, { suggestedMin: 20, suggestedMax: 40 });
   charts.curr = lineChart($("cCurr"), ["Pack current"], { suggestedMin: -1, suggestedMax: 4 });
   $("cells").innerHTML = cells.map((c) =>
-    `<tr><td><span class="swatch"></span>${c}</td><td></td><td></td><td></td><td></td></tr>`).join("");
+    `<tr><td><span class="swatch"></span>${c}</td>${"<td></td>".repeat(7)}</tr>`).join("");
   applyTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 }
@@ -278,10 +279,14 @@ function renderStatus(t) {
     : bleeding.length ? "Bleeding cell " + bleeding.join(", ") : "Balancing idle";
   const rows = $("cells").rows;
   for (let i = 0; i < NUM_CELLS; i++) {
-    rows[i].cells[1].textContent = api._api_cell_v(i).toFixed(3);
-    rows[i].cells[2].textContent = (api._api_cell_soc(i) * 100).toFixed(1);
-    rows[i].cells[3].textContent = api._api_cell_temp_c(i).toFixed(1);
-    rows[i].cells[4].textContent = (mask >> i) & 1 ? "Bleeding" : "–";
+    const cells = rows[i].cells;
+    cells[1].textContent = api._api_cell_v(i).toFixed(4);
+    cells[2].textContent = api._api_cell_meas_mv(i);
+    cells[3].textContent = (api._api_cell_soc(i) * 100).toFixed(1);
+    cells[4].textContent = api._api_cell_temp_c(i).toFixed(1);
+    cells[5].textContent = api._api_cell_capacity_ah(i).toFixed(3);
+    cells[6].textContent = api._api_cell_r_mohm(i).toFixed(1);
+    cells[7].textContent = (mask >> i) & 1 ? "Bleeding" : "–";
   }
 }
 
@@ -290,6 +295,7 @@ const INPUTS = {
   load: (el) => api._api_set_load(parseFloat(el.value)),
   ambient: (el) => api._api_set_ambient(parseFloat(el.value)),
   balancing: (el) => api._api_set_balancing(el.checked ? 1 : 0),
+  noise: (el) => api._api_set_noise(el.checked ? 1 : 0),
 };
 
 // Sim -> controls, so scenario events show up on the sliders.
@@ -300,6 +306,7 @@ function renderControls() {
   $("load").value = load;
   $("ambient").value = amb;
   $("balancing").checked = api._api_balancing() === 1;
+  $("noise").checked = api._api_noise() === 1;
 }
 
 function renderScenario(t) {
@@ -357,7 +364,7 @@ function tick() {
 
 function wire() {
   for (const [id, push] of Object.entries(INPUTS)) {
-    $(id).addEventListener(id === "balancing" ? "change" : "input", () => {
+    $(id).addEventListener($(id).type === "checkbox" ? "change" : "input", () => {
       push($(id));
       renderStatus(api._api_time_s());
       renderControls();

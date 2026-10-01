@@ -106,5 +106,9 @@ void soc_update(soc_t *s, int32_t current_ma, uint16_t min_cell_mv, uint32_t dt_
 
 void soc_step(soc_t *s, uint32_t dt_ms)
 {
-    soc_update(s, hal_read_pack_current_ma(), soc_min_cell_mv(), dt_ms);
+    /* Separate statements: argument evaluation order is unspecified, and
+     * with noisy sensors the read order changes the values. */
+    int32_t ma = hal_read_pack_current_ma();
+    uint16_t min_mv = soc_min_cell_mv();
+    soc_update(s, ma, min_mv, dt_ms);
 }
