@@ -1,0 +1,8 @@
+{
+  "name": "bms-simulator",
+  "private": true,
+  "description": "Dev dependencies for the dashboard browser test (make test-browser)",
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

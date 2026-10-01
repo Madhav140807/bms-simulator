@@ -141,3 +141,10 @@ the API and dashboard by the later milestones, see their sections.)
 - Final check (milestone 7 pass): fresh clone of origin/main, clean env with
   no emsdk sourcing: 115 unit tests, 10 WASM tests and 16 headless Chromium
   dashboard checks (both themes, protection, balancing, scenarios) all pass.
+- `make test-browser` (tests/test_browser.cjs, Playwright): serves `web/` on
+  a free local port, loads the dashboard in headless Chromium (light and
+  dark) and drives protection, balancing and scenarios through the UI;
+  fails on any page error. 26 checks, all passing (~36 s). Screenshots in
+  `build/screenshots/`. Needs `npm install && npx playwright install
+  chromium` once. Verified it fails (exit 1) on an injected JS error and a
+  wrong fault label.

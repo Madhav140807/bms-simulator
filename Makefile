@@ -35,7 +35,7 @@ EMFLAGS  := -sMODULARIZE=1 -sEXPORT_NAME=createBms -sENVIRONMENT=web,node \
             -sEXPORTED_FUNCTIONS=[$(EXPORTS)] \
             -sEXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString]
 
-.PHONY: all test test-wasm run scenarios clean wasm serve
+.PHONY: all test test-wasm test-browser run scenarios clean wasm serve
 
 SCENARIO ?= discharge_1c
 CSV_DIR  := $(BUILD)/csv
@@ -71,6 +71,11 @@ $(WEB)/bms.js: $(WASM_SRC) $(HDRS)
 # Checks the WASM build from Node against the native CSV runner.
 test-wasm: wasm $(BUILD)/bms
 	node tests/test_wasm.cjs
+
+# Drives the dashboard in headless Chromium (needs `npm install` and
+# `npx playwright install chromium` once).
+test-browser: wasm
+	node tests/test_browser.cjs
 
 serve: wasm
 	cd $(WEB) && python3 -m http.server 8000
