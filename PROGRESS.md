@@ -3,7 +3,7 @@
 ## Roadmap
 1. [x] Build system, Unity tests, battery pack sim model
 2. [x] HAL: voltage/current/temperature sensing and contactor/balance control
-3. [ ] Firmware: protection (over/under voltage, over current, over temp) with fault state
+3. [x] Firmware: protection (over/under voltage, over current, over temp) with fault state
 4. [ ] Firmware: SOC estimation (coulomb counting + OCV correction)
 5. [ ] Firmware: passive cell balancing
 6. [ ] Harness: scenario runner wiring sim + HAL + firmware, CSV output
@@ -33,3 +33,16 @@
   a 33 ohm bleed resistor per cell switched by `sim_pack_set_balance`.
   `sim_pack_current()` returns the current actually flowing.
 - Tests: 11 cell, 8 pack, 9 HAL, all passing.
+
+## Milestone 3: Protection
+- `firmware/protection.c` + `.h`: includes only `hal.h`. Faults are bit flags:
+  OV (> 4250 mV), UV (< 3000 mV), OC discharge (> 10 A), OC charge (> 3 A),
+  OT (> 60.0 C). Limits are configurable via `prot_limits_t`.
+- `protection_check()` is pure threshold logic on a `prot_sample_t`;
+  `protection_step()` reads the HAL, debounces (3 consecutive steps by
+  default, any clean step resets the counter), latches faults and opens the
+  contactor. `protection_clear()` only clears and recloses the contactor when
+  no condition is still present.
+- Harness runs `protection_step()` every second and adds `contactor,faults`
+  CSV columns; the 1C discharge now ends with a UV trip.
+- Tests: 11 cell, 8 pack, 9 HAL, 17 protection, all passing.

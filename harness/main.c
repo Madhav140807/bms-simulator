@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include "hal_sim.h"
 #include "pack.h"
+#include "protection.h"
 
 #define CAPACITY_AH   3.0
 #define START_SOC     1.0
@@ -15,17 +17,17 @@ static void print_header(void)
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         printf(",cell%d_v,cell%d_soc,cell%d_temp_c", i, i, i);
     }
-    printf("\n");
+    printf(",contactor,faults\n");
 }
 
-static void print_row(int t, const sim_pack_t *pack)
+static void print_row(int t, const sim_pack_t *pack, const prot_t *prot)
 {
     printf("%d,%.3f,%.4f", t, sim_pack_current(pack), sim_pack_voltage(pack));
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         const sim_cell_t *c = &pack->cells[i];
         printf(",%.4f,%.4f,%.2f", sim_cell_voltage(c), c->soc, c->temp_c);
     }
-    printf("\n");
+    printf(",%d,0x%02x\n", pack->contactor_closed, prot->faults);
 }
 
 int main(void)
@@ -33,10 +35,14 @@ int main(void)
     sim_pack_t pack;
     sim_pack_init(&pack, CAPACITY_AH, START_SOC, CELL_R_OHM);
     sim_pack_set_current(&pack, LOAD_A);
+    hal_sim_attach(&pack);
+    prot_t prot;
+    protection_init(&prot, NULL);
     print_header();
     for (int t = 0; t <= DURATION_S; t++) {
+        protection_step(&prot);
         if (t % LOG_EVERY_S == 0) {
-            print_row(t, &pack);
+            print_row(t, &pack, &prot);
         }
         sim_pack_step(&pack, DT_S);
     }
