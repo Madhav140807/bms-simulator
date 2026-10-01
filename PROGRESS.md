@@ -148,3 +148,12 @@ the API and dashboard by the later milestones, see their sections.)
   `build/screenshots/`. Needs `npm install && npx playwright install
   chromium` once. Verified it fails (exit 1) on an injected JS error and a
   wrong fault label.
+
+## CI and GitHub Pages
+- `.github/workflows/ci.yml` (every push and PR): job `unit` runs
+  `make test` and `make scenarios` (CSV uploaded as an artifact); job
+  `wasm-browser` installs Emscripten 6.0.10 (cached) and Playwright, then
+  runs `make test-wasm` and `make test-browser` (screenshots uploaded).
+- `.github/workflows/deploy.yml` (every push to main, or manual): builds the
+  WASM and deploys `web/` to GitHub Pages with actions/deploy-pages.
+- Both lint clean with actionlint 1.7.12.

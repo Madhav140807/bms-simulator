@@ -2,6 +2,9 @@
 Simulated 4S lithium ion pack plus BMS firmware in C, compiled to WebAssembly
 with a live browser dashboard.
 
+Live dashboard: https://madhav140807.github.io/bms-simulator/ (deployed by
+`.github/workflows/deploy.yml` on every push to main; CI runs all tests).
+
 Emscripten is expected on PATH or in `~/emsdk`:
 
 ```sh
