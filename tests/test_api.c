@@ -96,6 +96,29 @@ void test_hot_ambient_trips_ot(void)
     TEST_ASSERT_TRUE(api_faults() & PROT_FAULT_OT);
 }
 
+void test_soc_estimate_seeded_from_ocv(void)
+{
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, 50.0, api_soc_est_pct());
+}
+
+void test_soc_estimate_tracks_discharge(void)
+{
+    api_reset(1.0);
+    api_set_load(3.0);
+    api_step(600);   /* 0.5 Ah of 3 Ah = 16.7 % */
+    TEST_ASSERT_DOUBLE_WITHIN(0.5, 100.0 - 16.67, api_soc_est_pct());
+    TEST_ASSERT_DOUBLE_WITHIN(1.0, api_cell_soc(0) * 100.0, api_soc_est_pct());
+}
+
+void test_soc_estimate_corrects_after_rest(void)
+{
+    api_set_cell_soc(1, 0.2);   /* estimate still thinks 50 % */
+    api_step(10);
+    TEST_ASSERT_TRUE(api_soc_est_pct() > 45.0);
+    api_step(300);              /* 5 min rest triggers OCV correction */
+    TEST_ASSERT_DOUBLE_WITHIN(1.5, 20.0, api_soc_est_pct());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -109,5 +132,8 @@ int main(void)
     RUN_TEST(test_set_cell_soc_clamps);
     RUN_TEST(test_bad_cell_index_reads_zero);
     RUN_TEST(test_hot_ambient_trips_ot);
+    RUN_TEST(test_soc_estimate_seeded_from_ocv);
+    RUN_TEST(test_soc_estimate_tracks_discharge);
+    RUN_TEST(test_soc_estimate_corrects_after_rest);
     return UNITY_END();
 }

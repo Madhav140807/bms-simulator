@@ -1,9 +1,9 @@
 #ifndef API_H
 #define API_H
 
-/* Flat C API over sim + HAL + protection, exported to JavaScript by the
- * WebAssembly build. Owns one pack and one protection instance. Each step
- * runs protection then advances the sim by one second. */
+/* Flat C API over sim + HAL + firmware, exported to JavaScript by the
+ * WebAssembly build. Owns one pack plus the firmware state. Each step
+ * runs the firmware (protection, SOC) then advances the sim by one second. */
 
 #define API_DT_S 1.0
 
@@ -23,6 +23,7 @@ double api_cell_soc(int cell);
 double api_cell_temp_c(int cell);
 int    api_contactor(void);
 int    api_faults(void);
+double api_soc_est_pct(void);          /* firmware SOC estimate */
 int    api_num_cells(void);
 
 #endif

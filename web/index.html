@@ -121,6 +121,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
     <div class="card tile"><div class="k">Sim time</div><div class="v" id="tTime">0:00:00</div></div>
     <div class="card tile"><div class="k">Pack voltage</div><div class="v" id="tVolt">–</div></div>
     <div class="card tile"><div class="k">Pack current</div><div class="v" id="tCurr">–</div></div>
+    <div class="card tile"><div class="k">SOC estimate (firmware)</div><div class="v" id="tSoc">–</div></div>
     <div class="card tile"><div class="k">Contactor</div><div class="v"><span class="status" id="tCont"></span></div></div>
     <div class="card tile">
       <div class="k">Protection</div>
@@ -131,7 +132,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 
   <section class="charts">
     <div class="card chart"><h2>Cell voltage (V)</h2><div class="box"><canvas id="cVolt"></canvas></div></div>
-    <div class="card chart"><h2>Cell state of charge (%)</h2><div class="box"><canvas id="cSoc"></canvas></div></div>
+    <div class="card chart"><h2>State of charge (%): cells vs firmware estimate</h2><div class="box"><canvas id="cSoc"></canvas></div></div>
     <div class="card chart"><h2>Cell temperature (°C)</h2><div class="box"><canvas id="cTemp"></canvas></div></div>
     <div class="card chart"><h2>Pack current (A)</h2><div class="box"><canvas id="cCurr"></canvas></div></div>
   </section>
@@ -189,7 +190,9 @@ function applyTheme() {
   Chart.defaults.color = css("--muted");
   Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   for (const c of Object.values(charts)) {
-    c.data.datasets.forEach((d, i) => { d.borderColor = d.backgroundColor = series[i]; });
+    c.data.datasets.forEach((d, i) => {
+      d.borderColor = d.backgroundColor = d.reference ? css("--ink-2") : series[i];
+    });
     for (const ax of Object.values(c.options.scales)) {
       ax.grid = { color: css("--grid") };
       ax.border = { color: css("--axis") };
@@ -204,7 +207,8 @@ function applyTheme() {
 function buildCharts() {
   const cells = Array.from({ length: NUM_CELLS }, (_, i) => `Cell ${i + 1}`);
   charts.volt = lineChart($("cVolt"), cells, { suggestedMin: 3.0, suggestedMax: 4.2 });
-  charts.soc = lineChart($("cSoc"), cells, { min: 0, max: 100 });
+  charts.soc = lineChart($("cSoc"), [...cells, "Firmware estimate"], { min: 0, max: 100 });
+  Object.assign(charts.soc.data.datasets[NUM_CELLS], { reference: true, borderDash: [6, 4] });
   charts.temp = lineChart($("cTemp"), cells, { suggestedMin: 20, suggestedMax: 40 });
   charts.curr = lineChart($("cCurr"), ["Pack current"], { suggestedMin: -1, suggestedMax: 4 });
   $("cells").innerHTML = cells.map((c) =>
@@ -226,6 +230,7 @@ function sample() {
     push(charts.soc, i, t, api._api_cell_soc(i) * 100);
     push(charts.temp, i, t, api._api_cell_temp_c(i));
   }
+  push(charts.soc, NUM_CELLS, t, api._api_soc_est_pct());
   push(charts.curr, 0, t, api._api_current_a());
   for (const c of Object.values(charts)) c.update("none");
   renderStatus(t);
@@ -239,6 +244,7 @@ function renderStatus(t) {
   $("tTime").textContent = fmtTime(t);
   $("tVolt").textContent = api._api_pack_v().toFixed(2) + " V";
   $("tCurr").textContent = api._api_current_a().toFixed(2) + " A";
+  $("tSoc").textContent = api._api_soc_est_pct().toFixed(1) + " %";
   setStatus($("tCont"), api._api_contactor() === 1, "Closed", "Open");
   const f = api._api_faults();
   setStatus($("tProt"), f === 0, "OK", "Fault");

@@ -3,12 +3,14 @@
 #include "hal_sim.h"
 #include "pack.h"
 #include "protection.h"
+#include "soc.h"
 
 #define CAPACITY_AH 3.0
 #define CELL_R_OHM  0.02
 
 static sim_pack_t pack;
 static prot_t prot;
+static soc_t est;
 static double time_s;
 
 static int valid_cell(int cell)
@@ -21,6 +23,7 @@ void api_reset(double soc)
     sim_pack_init(&pack, CAPACITY_AH, soc, CELL_R_OHM);
     hal_sim_attach(&pack);
     protection_init(&prot, NULL);
+    soc_init(&est, NULL);
     time_s = 0.0;
 }
 
@@ -45,6 +48,7 @@ void api_step(int steps)
 {
     for (int i = 0; i < steps; i++) {
         protection_step(&prot);
+        soc_step(&est, (uint32_t)(API_DT_S * 1000));
         sim_pack_step(&pack, API_DT_S);
         time_s += API_DT_S;
     }
@@ -62,6 +66,11 @@ double api_pack_v(void)    { return sim_pack_voltage(&pack); }
 int    api_contactor(void) { return pack.contactor_closed ? 1 : 0; }
 int    api_faults(void)    { return prot.faults; }
 int    api_num_cells(void) { return SIM_PACK_CELLS; }
+
+double api_soc_est_pct(void)
+{
+    return soc_get(&est) / 100.0;
+}
 
 double api_cell_v(int cell)
 {

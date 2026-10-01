@@ -59,6 +59,11 @@
 - Firmware has its own mV OCV table (same curve as the sim, no sim include).
 - Harness runs 4200 s (discharge, UV trip, rest) and adds `soc_est_pct`.
 - Tests: 11 cell, 8 pack, 9 HAL, 17 protection, 17 SOC, all passing.
+- Dashboard (after milestones 7/8 landed): `api_soc_est_pct()` runs
+  `soc_step()` each sim second; the dashboard shows an "SOC estimate
+  (firmware)" tile and plots the estimate as a dashed line against the true
+  cell SOCs. 3 more API tests (seeding, tracking a discharge, OCV correction
+  after 5 min rest). Verified in headless Chromium.
 
 ## Milestones 7 and 8: WebAssembly build and web dashboard
 (Done ahead of 5 and 6. The dashboard drives sim + protection; firmware SOC
@@ -76,4 +81,4 @@ estimate and balancing can be added to the API next.)
   dark themes.
 - Verified in headless Chromium: page loads with no console errors, sim
   runs, 15 A trips OC discharge and opens the contactor, clear recloses it.
-- Tests: 10 API tests (native, Unity). All suites pass.
+- Tests: 10 API tests (native, Unity), 13 after the SOC wiring. All pass.
