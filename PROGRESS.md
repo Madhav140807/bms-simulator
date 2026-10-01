@@ -116,10 +116,11 @@
   across 8 suites, all passing.
 
 ## Milestones 7 and 8: WebAssembly build and web dashboard
-(Done ahead of 5 and 6. The dashboard drives sim + protection; firmware SOC
-estimate and balancing can be added to the API next.)
-- `harness/api.c` + `.h`: flat C API over one pack + protection instance
-  (reset, set load/ambient/cell SOC, step N seconds, clear faults, getters).
+(First built ahead of 5 and 6; SOC, balancing and scenarios were wired into
+the API and dashboard by the later milestones, see their sections.)
+- `harness/api.c` + `.h`: flat C API over one `bms_sys_t` (reset, set
+  load/ambient/cell SOC, step N seconds, clear faults, balancing toggle,
+  scenarios, getters).
 - `make wasm` builds `web/bms.js` + `web/bms.wasm` with emcc (modularized as
   `createBms()`, same `-Wall -Wextra -Werror` flags). Uses `emcc` from PATH,
   else `~/emsdk/upstream/emscripten/emcc` (override with `EMSDK=` or
@@ -136,4 +137,7 @@ estimate and balancing can be added to the API next.)
   dark themes.
 - Verified in headless Chromium: page loads with no console errors, sim
   runs, 15 A trips OC discharge and opens the contactor, clear recloses it.
-- Tests: 10 API tests (native, Unity), 13 after the SOC wiring. All pass.
+- Tests: 10 API tests at first; 19 now (Unity). All pass.
+- Final check (milestone 7 pass): fresh clone of origin/main, clean env with
+  no emsdk sourcing: 115 unit tests, 10 WASM tests and 16 headless Chromium
+  dashboard checks (both themes, protection, balancing, scenarios) all pass.
