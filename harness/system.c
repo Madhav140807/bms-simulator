@@ -10,6 +10,7 @@ void sys_init(bms_sys_t *sys, double soc)
     sys_set_noise(true);
     protection_init(&sys->prot, NULL);
     soc_init(&sys->soc, NULL);
+    ekf_init(&sys->ekf, NULL);
     balance_init(&sys->bal, NULL);
     sys->balancing = true;
     sys->time_s = 0;
@@ -20,6 +21,7 @@ void sys_step(bms_sys_t *sys)
     hal_sim_attach(&sys->pack);
     protection_step(&sys->prot);
     soc_step(&sys->soc, SYS_DT_MS);
+    ekf_step(&sys->ekf, SYS_DT_MS);
     balance_step(&sys->bal, sys->balancing && sys->prot.faults == PROT_FAULT_NONE);
     sim_pack_step(&sys->pack, SYS_DT_MS / 1000.0);
     sys->time_s++;

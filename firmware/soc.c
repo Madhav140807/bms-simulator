@@ -1,7 +1,7 @@
 #include <stddef.h>
+#include "ocv.h"
 #include "soc.h"
 
-#define OCV_POINTS   11u
 #define MS_PER_HOUR  3600000LL
 
 const soc_config_t SOC_DEFAULT_CONFIG = {
@@ -10,27 +10,9 @@ const soc_config_t SOC_DEFAULT_CONFIG = {
     .rest_ms      = 300000,
 };
 
-/* Cell OCV (mV) at 0 %, 10 %, ... 100 % SOC. Must be strictly increasing. */
-static const uint16_t ocv_mv[OCV_POINTS] = {
-    3000, 3450, 3550, 3620, 3680, 3740, 3820, 3900, 3980, 4070, 4200
-};
-
 uint16_t soc_from_ocv_mv(uint16_t mv)
 {
-    if (mv <= ocv_mv[0]) {
-        return 0;
-    }
-    if (mv >= ocv_mv[OCV_POINTS - 1]) {
-        return SOC_FULL_CPCT;
-    }
-    uint8_t i = 0;
-    while (mv >= ocv_mv[i + 1]) {
-        i++;
-    }
-    uint32_t step = SOC_FULL_CPCT / (OCV_POINTS - 1);
-    uint32_t span = (uint32_t)(ocv_mv[i + 1] - ocv_mv[i]);
-    uint32_t frac = (uint32_t)(mv - ocv_mv[i]) * step / span;
-    return (uint16_t)(i * step + frac);
+    return ocv_soc_cpct(mv);
 }
 
 static int64_t capacity_mams(const soc_t *s)

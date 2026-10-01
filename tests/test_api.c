@@ -197,6 +197,28 @@ void test_reset_leaves_scenario_mode(void)
     TEST_ASSERT_EQUAL_DOUBLE(5.0, api_time_s());
 }
 
+void test_corrupted_estimates_kalman_recovers_coulomb_does_not(void)
+{
+    api_reset(0.9);
+    api_set_load(3.0);
+    api_step(10);
+    api_corrupt_estimates(50.0);
+    TEST_ASSERT_DOUBLE_WITHIN(0.01, 50.0, api_ekf_pct());
+    api_step(30);
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, min_cell_soc_pct(), api_ekf_pct());
+    TEST_ASSERT_TRUE(min_cell_soc_pct() - api_soc_est_pct() > 30.0);
+    TEST_ASSERT_TRUE(api_ekf_sigma_pct() < 2.0);
+}
+
+void test_ekf_cell_estimates_follow_cells(void)
+{
+    api_set_cell_soc(1, 0.8);
+    api_set_load(1.0);
+    api_step(30);
+    TEST_ASSERT_DOUBLE_WITHIN(2.0, api_cell_soc(1) * 100.0, api_ekf_cell_pct(1));
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, api_ekf_cell_pct(9));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -219,5 +241,7 @@ int main(void)
     RUN_TEST(test_scenario_names_and_bounds);
     RUN_TEST(test_scenario_runs_and_stops_at_end);
     RUN_TEST(test_reset_leaves_scenario_mode);
+    RUN_TEST(test_corrupted_estimates_kalman_recovers_coulomb_does_not);
+    RUN_TEST(test_ekf_cell_estimates_follow_cells);
     return UNITY_END();
 }

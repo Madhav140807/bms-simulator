@@ -6,7 +6,7 @@ void csv_header(FILE *out)
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         fprintf(out, ",cell%d_v,cell%d_soc,cell%d_temp_c", i, i, i);
     }
-    fprintf(out, ",contactor,faults,soc_est_pct,balance_mask\n");
+    fprintf(out, ",contactor,faults,soc_est_pct,balance_mask,ekf_soc_pct\n");
 }
 
 void csv_row(FILE *out, const bms_sys_t *sys)
@@ -18,8 +18,9 @@ void csv_row(FILE *out, const bms_sys_t *sys)
         const sim_cell_t *c = &pack->cells[i];
         fprintf(out, ",%.4f,%.4f,%.2f", sim_cell_voltage(c), c->soc, c->temp_c);
     }
-    fprintf(out, ",%d,0x%02x,%.2f,0x%02x\n", pack->contactor_closed,
-            sys->prot.faults, soc_get(&sys->soc) / 100.0, sys->bal.mask);
+    fprintf(out, ",%d,0x%02x,%.2f,0x%02x,%.2f\n", pack->contactor_closed,
+            sys->prot.faults, soc_get(&sys->soc) / 100.0, sys->bal.mask,
+            ekf_pack_cpct(&sys->ekf) / 100.0);
 }
 
 int csv_run(FILE *out, const scenario_t *scn, uint32_t every_s)

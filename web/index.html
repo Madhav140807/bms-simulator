@@ -64,7 +64,7 @@ button, select {
 button:hover { border-color: var(--ink-2); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .val { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .tile .k { color: var(--ink-2); font-size: 12px; }
 .tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
 .status { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
@@ -72,6 +72,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--critical); color: var(--ink); }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; margin-bottom: 16px; }
+.chart.wide { grid-column: 1 / -1; }
 .chart h2 { font-size: 14px; margin: 0 0 8px; }
 .chart .box { position: relative; height: 240px; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -131,6 +132,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
         <button id="reset">Reset</button>
         <button id="clear">Clear faults</button>
         <button id="weak" title="Drop cell 3 to 5% SOC">Weak cell 3</button>
+        <button id="corrupt" title="Force both SOC estimators to 50 % and watch which one recovers">Corrupt SOC estimates</button>
         <button id="imbalance" title="Spread cell SOCs (80/72/66/75 %) and rest the pack so balancing can run">Imbalanced pack</button>
       </div>
     </div>
@@ -140,7 +142,8 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
     <div class="card tile"><div class="k">Sim time</div><div class="v" id="tTime">0:00:00</div></div>
     <div class="card tile"><div class="k">Pack voltage</div><div class="v" id="tVolt">–</div></div>
     <div class="card tile"><div class="k">Pack current</div><div class="v" id="tCurr">–</div></div>
-    <div class="card tile"><div class="k">SOC estimate (firmware)</div><div class="v" id="tSoc">–</div></div>
+    <div class="card tile"><div class="k">SOC (coulomb count)</div><div class="v" id="tSoc">–</div></div>
+    <div class="card tile"><div class="k">SOC (Kalman)</div><div class="v" id="tEkf">–</div><div class="note" id="tEkfSigma"></div></div>
     <div class="card tile"><div class="k">Cell spread</div><div class="v" id="tSpread">–</div><div class="note" id="tBal"></div></div>
     <div class="card tile"><div class="k">Contactor</div><div class="v"><span class="status" id="tCont"></span></div></div>
     <div class="card tile">
@@ -152,9 +155,10 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 
   <section class="charts">
     <div class="card chart"><h2>Cell voltage (V)</h2><div class="box"><canvas id="cVolt"></canvas></div></div>
-    <div class="card chart"><h2>State of charge (%): cells vs firmware estimate</h2><div class="box"><canvas id="cSoc"></canvas></div></div>
+    <div class="card chart"><h2>State of charge (%): cells vs coulomb count estimate</h2><div class="box"><canvas id="cSoc"></canvas></div></div>
     <div class="card chart"><h2>Cell temperature (°C)</h2><div class="box"><canvas id="cTemp"></canvas></div></div>
     <div class="card chart"><h2>Pack current (A)</h2><div class="box"><canvas id="cCurr"></canvas></div></div>
+    <div class="card chart wide" id="kalmanCard"><h2>Kalman filter vs coulomb counting: SOC of the lowest cell (%)</h2><div class="box"><canvas id="cKalman"></canvas></div></div>
   </section>
 
   <section class="card table-wrap" aria-label="Cell table">
@@ -194,8 +198,9 @@ function lineChart(canvas, series, yOpts) {
       animation: false, maintainAspectRatio: false, parsing: false, normalized: true,
       interaction: { mode: "index", intersect: false, axis: "x" },
       plugins: {
-        legend: { display: series.length > 1, position: "bottom", labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2 } },
-        tooltip: { callbacks: { title: (items) => fmtTime(items[0].parsed.x) } },
+        legend: { display: series.length > 1, position: "bottom", labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2,
+          filter: (item, data) => !data.datasets[item.datasetIndex].band } },
+        tooltip: { filter: (item) => !item.dataset.band, callbacks: { title: (items) => fmtTime(items[0].parsed.x) } },
       },
       scales: {
         x: { type: "linear", ticks: { callback: (v) => fmtTime(v), maxTicksLimit: 6 } },
@@ -211,7 +216,9 @@ function applyTheme() {
   Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   for (const c of Object.values(charts)) {
     c.data.datasets.forEach((d, i) => {
-      d.borderColor = d.backgroundColor = d.reference ? css("--ink-2") : series[i];
+      const color = d.truth ? css("--ink") : d.reference ? css("--ink-2") : series[d.slot ?? i];
+      d.borderColor = d.band ? "transparent" : color;
+      d.backgroundColor = d.band ? color + "33" : color;
     });
     for (const ax of Object.values(c.options.scales)) {
       ax.grid = { color: css("--grid") };
@@ -227,10 +234,18 @@ function applyTheme() {
 function buildCharts() {
   const cells = Array.from({ length: NUM_CELLS }, (_, i) => `Cell ${i + 1}`);
   charts.volt = lineChart($("cVolt"), cells, { suggestedMin: 3.0, suggestedMax: 4.2 });
-  charts.soc = lineChart($("cSoc"), [...cells, "Firmware estimate"], { min: 0, max: 100 });
+  charts.soc = lineChart($("cSoc"), [...cells, "Coulomb count estimate"], { min: 0, max: 100 });
   Object.assign(charts.soc.data.datasets[NUM_CELLS], { reference: true, borderDash: [6, 4] });
   charts.temp = lineChart($("cTemp"), cells, { suggestedMin: 20, suggestedMax: 40 });
   charts.curr = lineChart($("cCurr"), ["Pack current"], { suggestedMin: -1, suggestedMax: 4 });
+  charts.kalman = lineChart($("cKalman"),
+    ["True SOC (lowest cell)", "Coulomb counting", "Kalman +2σ", "Kalman −2σ", "Kalman filter"], { min: 0, max: 100 });
+  const k = charts.kalman.data.datasets;
+  Object.assign(k[0], { truth: true });
+  Object.assign(k[1], { slot: 1, borderDash: [6, 4] });
+  Object.assign(k[2], { slot: 0, band: true, pointHoverRadius: 0 });
+  Object.assign(k[3], { slot: 0, band: true, pointHoverRadius: 0, fill: "-1" });
+  Object.assign(k[4], { slot: 0 });
   $("cells").innerHTML = cells.map((c) =>
     `<tr><td><span class="swatch"></span>${c}</td>${"<td></td>".repeat(7)}</tr>`).join("");
   applyTheme();
@@ -252,6 +267,10 @@ function sample() {
   }
   push(charts.soc, NUM_CELLS, t, api._api_soc_est_pct());
   push(charts.curr, 0, t, api._api_current_a());
+  const truth = Math.min(...Array.from({ length: NUM_CELLS }, (_, i) => api._api_cell_soc(i))) * 100;
+  const ekf = api._api_ekf_pct(), sigma = api._api_ekf_sigma_pct();
+  [truth, api._api_soc_est_pct(), Math.min(100, ekf + 2 * sigma), Math.max(0, ekf - 2 * sigma), ekf]
+    .forEach((y, i) => push(charts.kalman, i, t, y));
   for (const c of Object.values(charts)) c.update("none");
   renderStatus(t);
   renderControls();
@@ -267,6 +286,8 @@ function renderStatus(t) {
   $("tVolt").textContent = api._api_pack_v().toFixed(2) + " V";
   $("tCurr").textContent = api._api_current_a().toFixed(2) + " A";
   $("tSoc").textContent = api._api_soc_est_pct().toFixed(1) + " %";
+  $("tEkf").textContent = api._api_ekf_pct().toFixed(1) + " %";
+  $("tEkfSigma").textContent = "± " + api._api_ekf_sigma_pct().toFixed(2) + " % (1σ)";
   setStatus($("tCont"), api._api_contactor() === 1, "Closed", "Open");
   const f = api._api_faults();
   setStatus($("tProt"), f === 0, "OK", "Fault");
@@ -377,6 +398,7 @@ function wire() {
     if (!api._api_clear_faults()) alert("A fault condition is still present; fix it before clearing.");
     sample();
   });
+  $("corrupt").addEventListener("click", () => { api._api_corrupt_estimates(50); sample(); });
   $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });
   $("imbalance").addEventListener("click", () => {
     [0.80, 0.72, 0.66, 0.75].forEach((soc, i) => api._api_set_cell_soc(i, soc));

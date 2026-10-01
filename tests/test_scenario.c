@@ -195,6 +195,25 @@ static void test_imbalance_converges(void)
     TEST_ASSERT_EQUAL_HEX8(0x00, sys.prot.faults);
 }
 
+static void test_ekf_tracks_lowest_cell_through_discharge(void)
+{
+    const scenario_t *scn = scenario_find("discharge_1c");
+    scenario_start(&run, scn, &sys);
+    double worst = 0.0;
+    while (sys.prot.faults == PROT_FAULT_NONE) {
+        sys_step(&sys);
+        scenario_apply(&run, &sys);
+        double min = 1.0;
+        for (int i = 0; i < SIM_PACK_CELLS; i++) {
+            min = sys.pack.cells[i].soc < min ? sys.pack.cells[i].soc : min;
+        }
+        double err = ekf_pack_cpct(&sys.ekf) / 100.0 - min * 100.0;
+        err = err < 0 ? -err : err;
+        worst = err > worst ? err : worst;
+    }
+    TEST_ASSERT_TRUE(worst < 3.0);
+}
+
 static void test_weak_cell_limits_pack(void)
 {
     run_to_end("weak_cell");
@@ -221,7 +240,7 @@ static void test_csv_rows_and_columns(void)
     }
     fclose(f);
     TEST_ASSERT_EQUAL_INT(rows + 1, lines);
-    TEST_ASSERT_EQUAL_INT(3 + 3 * SIM_PACK_CELLS + 4 - 1, cols);
+    TEST_ASSERT_EQUAL_INT(3 + 3 * SIM_PACK_CELLS + 5 - 1, cols);
 }
 
 static void test_csv_includes_final_row(void)
@@ -242,7 +261,7 @@ static void test_csv_header_starts_with_time(void)
     TEST_ASSERT_NOT_NULL(fgets(line, sizeof line, f));
     fclose(f);
     TEST_ASSERT_EQUAL_INT(0, strncmp(line, "time_s,current_a,pack_v,", 24));
-    TEST_ASSERT_NOT_NULL(strstr(line, ",balance_mask\n"));
+    TEST_ASSERT_NOT_NULL(strstr(line, ",balance_mask,ekf_soc_pct\n"));
 }
 
 int main(void)
@@ -263,6 +282,7 @@ int main(void)
     RUN_TEST(test_overcurrent_trips_then_recovers);
     RUN_TEST(test_over_temp_trips);
     RUN_TEST(test_imbalance_converges);
+    RUN_TEST(test_ekf_tracks_lowest_cell_through_discharge);
     RUN_TEST(test_weak_cell_limits_pack);
     RUN_TEST(test_csv_rows_and_columns);
     RUN_TEST(test_csv_includes_final_row);

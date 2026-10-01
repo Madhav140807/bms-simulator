@@ -45,7 +45,8 @@ createBms().then((m) => {
     const sameTime = m._api_time_s() === Number(want.time_s);
     const sameV = Math.abs(m._api_pack_v() - Number(want.pack_v)) < 1e-3;
     const sameSoc = Math.abs(m._api_soc_est_pct() - Number(want.soc_est_pct)) < 0.01;
-    check(m._api_scenario_done() && sameFaults && sameTime && sameV && sameSoc,
+    const sameEkf = Math.abs(m._api_ekf_pct() - Number(want.ekf_soc_pct)) < 0.01;
+    check(m._api_scenario_done() && sameFaults && sameTime && sameV && sameSoc && sameEkf,
           `scenario_${name}_matches_native`);
   }
   console.log(`\n${count} Tests ${failures} Failures`);

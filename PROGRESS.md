@@ -10,7 +10,7 @@
 7. [x] WebAssembly build (Emscripten)
 8. [x] Web dashboard (HTML/JS + Chart.js)
 9. [x] Sim realism: cell manufacturing mismatch and sensor noise
-10. [ ] Firmware: Kalman filter SOC estimation, dashboard chart
+10. [x] Firmware: Kalman filter SOC estimation, dashboard chart
 11. [ ] Fault injection (overheat, internal short, sensor failure) + sensor plausibility
 12. [ ] Firmware: CAN messages, dashboard CAN log panel
 
@@ -193,3 +193,26 @@ the API and dashboard by the later milestones, see their sections.)
   true cell. 135 unit tests, 11 WASM, 30 browser checks (new: capacities
   differ, voltages differ, readings scatter with noise and match truth
   without). All passing.
+
+## Milestone 10: Kalman filter SOC
+- `firmware/ocv.c`: the OCV table now shared by both estimators (`soc.c`
+  uses it unchanged), plus `ocv_mv_at()` and `ocv_slope_mv()` for the filter.
+- `firmware/ekf.c`: one extended Kalman filter per cell, state = SOC.
+  Predict by coulomb counting (q = 1e-8 per s); correct with the measured
+  cell voltage against OCV(SOC) - I * R0 (R0 = 20 mOhm, r = 25 mV^2).
+  Pack SOC = lowest cell. Single precision floats, Newton square root so
+  the firmware needs no libm. Seeds each cell from its OCV.
+- Runs every second next to the coulomb counter; CSV gains `ekf_soc_pct`.
+  WASM and native give identical results (checked by `make test-wasm`).
+- Accuracy with noise and mismatch: within 3 % of every cell through a
+  full 1C discharge (typically under 1 %). After both estimators are forced
+  to 50 % under load, the filter is back within 2 % in about 30 s; coulomb
+  counting stays wrong until a 5 min rest.
+- Dashboard: full width chart "Kalman filter vs coulomb counting" (true
+  lowest cell SOC, coulomb count, Kalman estimate with a +-2 sigma band),
+  "SOC (Kalman)" tile with sigma, "Corrupt SOC estimates" button.
+- Tests: 12 EKF/OCV, 1 system (tracks lowest cell through discharge),
+  2 API (recovers from corruption, per cell tracking). 150 unit tests,
+  11 WASM, 37 browser checks (new: chart visible with data, legend, tile,
+  tracks truth, recovers from corruption while coulomb counting stays
+  wrong). All passing.

@@ -98,8 +98,9 @@ void scenario_start(scn_run_t *run, const scenario_t *scn, bms_sys_t *sys)
     run->next = 0;
     sys_init(sys, scn->start_soc);
     scenario_apply(run, sys);
-    /* Cell SOC events at t = 0 change the OCV, so reseed the SOC estimate. */
+    /* Cell SOC events at t = 0 change the OCV, so reseed the SOC estimates. */
     soc_init(&sys->soc, NULL);
+    ekf_init(&sys->ekf, NULL);
 }
 
 void scenario_apply(scn_run_t *run, bms_sys_t *sys)

@@ -144,3 +144,25 @@ int api_cell_meas_mv(int cell)
 {
     return valid_cell(cell) ? sys.prot.last.cell_mv[cell] : 0;
 }
+
+double api_ekf_pct(void)
+{
+    return ekf_pack_cpct(&sys.ekf) / 100.0;
+}
+
+double api_ekf_sigma_pct(void)
+{
+    return ekf_sigma_cpct(&sys.ekf, ekf_min_cell(&sys.ekf)) / 100.0;
+}
+
+double api_ekf_cell_pct(int cell)
+{
+    return valid_cell(cell) ? ekf_cell_cpct(&sys.ekf, (uint8_t)cell) / 100.0 : 0.0;
+}
+
+void api_corrupt_estimates(double pct)
+{
+    uint16_t cpct = (uint16_t)(pct < 0.0 ? 0.0 : (pct > 100.0 ? 10000.0 : pct * 100.0));
+    soc_set(&sys.soc, cpct);
+    ekf_set(&sys.ekf, cpct);
+}

@@ -38,7 +38,11 @@ int    api_cell_meas_mv(int cell);       /* last HAL reading used by protection 
 int    api_noise(void);
 int    api_contactor(void);
 int    api_faults(void);
-double api_soc_est_pct(void);          /* firmware SOC estimate */
+double api_soc_est_pct(void);          /* coulomb counting estimate */
+double api_ekf_pct(void);              /* Kalman estimate, lowest cell */
+double api_ekf_sigma_pct(void);        /* its 1 sigma */
+double api_ekf_cell_pct(int cell);
+void   api_corrupt_estimates(double pct);   /* set both estimators to pct */
 int    api_balance_mask(void);          /* bit i = cell i bleeding */
 int    api_balancing(void);
 int    api_num_cells(void);

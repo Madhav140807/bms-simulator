@@ -79,7 +79,7 @@ async function openPage(browser, url, scheme, errors) {
 async function checkLoads(p, scheme) {
   check(await waitText(p, "#tTime", /^0:(0[1-9]|[1-5]\d):/), `${scheme}_sim_runs`);
   const t = await tiles(p);
-  check(/V$/.test(t["Pack voltage"]) && /%$/.test(t["SOC estimate (firmware)"]), `${scheme}_tiles_render`);
+  check(/V$/.test(t["Pack voltage"]) && /%$/.test(t["SOC (coulomb count)"]), `${scheme}_tiles_render`);
   check(await p.evaluate(() => Chart.getChart("cVolt").data.datasets[0].data.length > 1), `${scheme}_charts_have_data`);
   await p.screenshot({ path: path.join(shotDir, `${scheme}.png`), fullPage: true });
 }
@@ -111,6 +111,41 @@ async function checkMismatchAndNoise(p) {
   await p.uncheck("#noise");
   check(await maxReadingError(p, 10) <= 1.5, "noise_off_readings_match_truth");
   await p.check("#noise");
+}
+
+// Kalman estimate error and coulomb counting error vs the true lowest cell SOC.
+function estimatorErrors(p) {
+  return p.evaluate(() => {
+    const truth = Math.min(...[0, 1, 2, 3].map((i) => bms._api_cell_soc(i))) * 100;
+    return { ekf: Math.abs(bms._api_ekf_pct() - truth), coulomb: Math.abs(bms._api_soc_est_pct() - truth) };
+  });
+}
+
+async function checkKalman(p) {
+  check(await p.isVisible("#cKalman"), "kalman_chart_visible");
+  const chart = await p.evaluate(() => {
+    const c = Chart.getChart("cKalman");
+    return { sets: c.data.datasets.length, points: c.data.datasets[4].data.length,
+             legend: c.legend.legendItems.map((l) => l.text) };
+  });
+  check(chart.sets === 5 && chart.points > 1, "kalman_chart_has_data");
+  check(chart.legend.join("|") === "True SOC (lowest cell)|Coulomb counting|Kalman filter", "kalman_legend_hides_band");
+  check(/%$/.test(await text(p, "#tEkf")) && /1σ/.test(await text(p, "#tEkfSigma")), "kalman_tile_shows_estimate");
+  check((await estimatorErrors(p)).ekf < 3, "kalman_tracks_truth");
+  // From a full pack, forcing the estimates to 50 % is a ~50 % error.
+  await p.click("#reset");
+  await p.selectOption("#speed", "1");
+  await waitText(p, "#tTime", /^0:00:(0[5-9]|[1-5]\d)/);
+  await p.click("#corrupt");
+  const recovered = await p.waitForFunction(() => {
+    const truth = Math.min(...[0, 1, 2, 3].map((i) => bms._api_cell_soc(i))) * 100;
+    return Math.abs(bms._api_ekf_pct() - truth) < 2;
+  }, null, { timeout: WAIT_MS }).then(() => true, () => false);
+  const err = await estimatorErrors(p);
+  check(recovered && err.ekf < 2, "kalman_recovers_from_corruption");
+  check(err.coulomb > 20, "coulomb_count_stays_wrong");
+  await p.screenshot({ path: path.join(shotDir, "kalman.png"), fullPage: true });
+  await p.selectOption("#speed", "60");
 }
 
 async function checkProtection(p) {
@@ -175,6 +210,7 @@ async function main() {
       await checkLoads(p, scheme);
       if (scheme === "light") {
         await checkMismatchAndNoise(p);
+        await checkKalman(p);
         await checkProtection(p);
         await checkBalancing(p);
         await checkScenarios(p);
