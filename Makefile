@@ -17,7 +17,9 @@ UNITY_DIR := tests/unity
 TEST_SRC  := $(wildcard tests/test_*.c)
 TEST_BINS := $(patsubst tests/%.c,$(BUILD)/%,$(TEST_SRC))
 
-EMCC     ?= emcc
+# Emscripten: emcc from PATH, else the emsdk checkout in ~/emsdk.
+EMSDK    ?= $(HOME)/emsdk
+EMCC     ?= $(or $(shell command -v emcc 2>/dev/null),$(EMSDK)/upstream/emscripten/emcc)
 WEB      := web
 WASM_SRC := harness/api.c harness/system.c harness/scenario.c $(LIB_SRC)
 API_FNS  := reset set_load set_ambient set_cell_soc step clear_faults \
@@ -33,7 +35,7 @@ EMFLAGS  := -sMODULARIZE=1 -sEXPORT_NAME=createBms -sENVIRONMENT=web,node \
             -sEXPORTED_FUNCTIONS=[$(EXPORTS)] \
             -sEXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString]
 
-.PHONY: all test run scenarios clean wasm serve
+.PHONY: all test test-wasm run scenarios clean wasm serve
 
 SCENARIO ?= discharge_1c
 CSV_DIR  := $(BUILD)/csv
@@ -65,6 +67,10 @@ wasm: $(WEB)/bms.js
 
 $(WEB)/bms.js: $(WASM_SRC) $(HDRS)
 	$(EMCC) $(CFLAGS) $(SRCS) -o $@ $(EMFLAGS)
+
+# Checks the WASM build from Node against the native CSV runner.
+test-wasm: wasm $(BUILD)/bms
+	node tests/test_wasm.cjs
 
 serve: wasm
 	cd $(WEB) && python3 -m http.server 8000

@@ -121,8 +121,13 @@ estimate and balancing can be added to the API next.)
 - `harness/api.c` + `.h`: flat C API over one pack + protection instance
   (reset, set load/ambient/cell SOC, step N seconds, clear faults, getters).
 - `make wasm` builds `web/bms.js` + `web/bms.wasm` with emcc (modularized as
-  `createBms()`, same `-Wall -Wextra -Werror` flags). Needs Emscripten:
-  `source ~/emsdk/emsdk_env.sh`. Build outputs are gitignored.
+  `createBms()`, same `-Wall -Wextra -Werror` flags). Uses `emcc` from PATH,
+  else `~/emsdk/upstream/emscripten/emcc` (override with `EMSDK=` or
+  `EMCC=`), so no `emsdk_env.sh` is needed. Build outputs are gitignored.
+- `make test-wasm` (tests/test_wasm.cjs, Node): API smoke tests plus every
+  scenario run in WASM must end in exactly the native CSV runner's final
+  state (time, faults, pack voltage, SOC estimate). 10 checks, all passing.
+  Kept out of `make test` so the Unity suites need no Emscripten.
 - `make serve` builds then serves `web/` on http://localhost:8000.
 - `web/index.html`: load and ambient sliders, run/pause, speed (10x to 600x),
   reset, clear faults, "weak cell 3" UV scenario; status tiles for pack
