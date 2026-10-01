@@ -4,7 +4,7 @@
 1. [x] Build system, Unity tests, battery pack sim model
 2. [x] HAL: voltage/current/temperature sensing and contactor/balance control
 3. [x] Firmware: protection (over/under voltage, over current, over temp) with fault state
-4. [ ] Firmware: SOC estimation (coulomb counting + OCV correction)
+4. [x] Firmware: SOC estimation (coulomb counting + OCV correction)
 5. [ ] Firmware: passive cell balancing
 6. [ ] Harness: scenario runner wiring sim + HAL + firmware, CSV output
 7. [ ] WebAssembly build (Emscripten)
@@ -46,3 +46,16 @@
 - Harness runs `protection_step()` every second and adds `contactor,faults`
   CSV columns; the 1C discharge now ends with a UV trip.
 - Tests: 11 cell, 8 pack, 9 HAL, 17 protection, all passing.
+
+## Milestone 4: SOC estimation
+- `firmware/soc.c` + `.h`: includes only `hal.h`. SOC in 0.01 % units
+  (`uint16_t`, 0..10000); remaining charge held as `int64_t` mA*ms.
+- `soc_init()` seeds the estimate from the OCV of the lowest cell (series pack
+  is limited by its weakest cell). `soc_update()` is pure: coulomb counts the
+  current, clamps to 0..capacity, and once |I| <= `rest_ma` (50 mA) has held
+  for `rest_ms` (5 min) it snaps SOC to the OCV lookup. Any load resets the
+  rest timer. `soc_step()` reads the HAL. Config via `soc_config_t`
+  (default 3000 mAh).
+- Firmware has its own mV OCV table (same curve as the sim, no sim include).
+- Harness runs 4200 s (discharge, UV trip, rest) and adds `soc_est_pct`.
+- Tests: 11 cell, 8 pack, 9 HAL, 17 protection, 17 SOC, all passing.
