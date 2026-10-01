@@ -7,8 +7,8 @@
 4. [x] Firmware: SOC estimation (coulomb counting + OCV correction)
 5. [ ] Firmware: passive cell balancing
 6. [ ] Harness: scenario runner wiring sim + HAL + firmware, CSV output
-7. [ ] WebAssembly build (Emscripten)
-8. [ ] Web dashboard (HTML/JS + Chart.js)
+7. [x] WebAssembly build (Emscripten)
+8. [x] Web dashboard (HTML/JS + Chart.js)
 
 ## Milestone 1: Build system and sim model
 - Makefile: `make` builds `build/bms`, `make test` runs all `tests/test_*.c`,
@@ -59,3 +59,21 @@
 - Firmware has its own mV OCV table (same curve as the sim, no sim include).
 - Harness runs 4200 s (discharge, UV trip, rest) and adds `soc_est_pct`.
 - Tests: 11 cell, 8 pack, 9 HAL, 17 protection, 17 SOC, all passing.
+
+## Milestones 7 and 8: WebAssembly build and web dashboard
+(Done ahead of 5 and 6. The dashboard drives sim + protection; firmware SOC
+estimate and balancing can be added to the API next.)
+- `harness/api.c` + `.h`: flat C API over one pack + protection instance
+  (reset, set load/ambient/cell SOC, step N seconds, clear faults, getters).
+- `make wasm` builds `web/bms.js` + `web/bms.wasm` with emcc (modularized as
+  `createBms()`, same `-Wall -Wextra -Werror` flags). Needs Emscripten:
+  `source ~/emsdk/emsdk_env.sh`. Build outputs are gitignored.
+- `make serve` builds then serves `web/` on http://localhost:8000.
+- `web/index.html`: load and ambient sliders, run/pause, speed (10x to 600x),
+  reset, clear faults, "weak cell 3" UV scenario; status tiles for pack
+  voltage, current, contactor and latched faults; Chart.js line charts of
+  cell voltage, SOC, temperature and pack current; per cell table. Light and
+  dark themes.
+- Verified in headless Chromium: page loads with no console errors, sim
+  runs, 15 A trips OC discharge and opens the contactor, clear recloses it.
+- Tests: 10 API tests (native, Unity). All suites pass.

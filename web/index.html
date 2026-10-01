@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMS Simulator</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #0ca30c; --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --accent: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+.sub { color: var(--ink-2); }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.controls label { display: block; color: var(--ink-2); font-size: 12px; margin-bottom: 4px; }
+.controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button, select {
+  font: inherit; color: var(--ink); background: var(--page);
+  border: 1px solid var(--axis); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--ink-2); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.val { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile .k { color: var(--ink-2); font-size: 12px; }
+.tile .v { font-size: 24px; font-weight: 600; margin-top: 2px; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--critical); color: var(--ink); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; margin-bottom: 16px; }
+.chart h2 { font-size: 14px; margin: 0 0 8px; }
+.chart .box { position: relative; height: 240px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+#error { display: none; color: var(--critical); margin-bottom: 12px; }
+.table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>BMS Simulator</h1>
+    <span class="sub">4S NMC pack, 3 Ah cells. C firmware running as WebAssembly.</span>
+  </header>
+  <div id="error" class="card"></div>
+
+  <section class="card controls" aria-label="Controls">
+    <div>
+      <label for="load">Load current (+ discharge, − charge): <span id="loadVal" class="val"></span></label>
+      <input id="load" type="range" min="-5" max="15" step="0.5" value="3">
+    </div>
+    <div>
+      <label for="ambient">Ambient temperature: <span id="ambientVal" class="val"></span></label>
+      <input id="ambient" type="range" min="-10" max="90" step="1" value="25">
+    </div>
+    <div>
+      <label for="speed">Simulation speed</label>
+      <div class="row">
+        <button id="run" class="primary">Pause</button>
+        <select id="speed">
+          <option value="1">10× real time</option>
+          <option value="6" selected>60× real time</option>
+          <option value="30">300× real time</option>
+          <option value="60">600× real time</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label>Actions</label>
+      <div class="row">
+        <button id="reset">Reset</button>
+        <button id="clear">Clear faults</button>
+        <button id="weak" title="Drop cell 3 to 5% SOC">Weak cell 3</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="tiles" aria-label="Pack status">
+    <div class="card tile"><div class="k">Sim time</div><div class="v" id="tTime">0:00:00</div></div>
+    <div class="card tile"><div class="k">Pack voltage</div><div class="v" id="tVolt">–</div></div>
+    <div class="card tile"><div class="k">Pack current</div><div class="v" id="tCurr">–</div></div>
+    <div class="card tile"><div class="k">Contactor</div><div class="v"><span class="status" id="tCont"></span></div></div>
+    <div class="card tile">
+      <div class="k">Protection</div>
+      <div class="v"><span class="status" id="tProt"></span></div>
+      <div class="chips" id="tFaults"></div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="card chart"><h2>Cell voltage (V)</h2><div class="box"><canvas id="cVolt"></canvas></div></div>
+    <div class="card chart"><h2>Cell state of charge (%)</h2><div class="box"><canvas id="cSoc"></canvas></div></div>
+    <div class="card chart"><h2>Cell temperature (°C)</h2><div class="box"><canvas id="cTemp"></canvas></div></div>
+    <div class="card chart"><h2>Pack current (A)</h2><div class="box"><canvas id="cCurr"></canvas></div></div>
+  </section>
+
+  <section class="card table-wrap" aria-label="Cell table">
+    <table>
+      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>SOC (%)</th><th>Temperature (°C)</th></tr></thead>
+      <tbody id="cells"></tbody>
+    </table>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="bms.js"></script>
+<script>
+"use strict";
+const NUM_CELLS = 4;
+const WINDOW_S = 3600;   // seconds of sim history kept on the charts
+const TICK_MS = 100;
+const FAULTS = [
+  [0x01, "Over voltage"], [0x02, "Under voltage"], [0x04, "Over current (discharge)"],
+  [0x08, "Over current (charge)"], [0x10, "Over temperature"],
+];
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+let api, running = true, charts = {};
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = Math.floor(s % 60);
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function lineChart(canvas, series, yOpts) {
+  return new Chart(canvas, {
+    type: "line",
+    data: { datasets: series.map((label) => ({ label, data: [], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 })) },
+    options: {
+      animation: false, maintainAspectRatio: false, parsing: false, normalized: true,
+      interaction: { mode: "index", intersect: false, axis: "x" },
+      plugins: {
+        legend: { display: series.length > 1, position: "bottom", labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2 } },
+        tooltip: { callbacks: { title: (items) => fmtTime(items[0].parsed.x) } },
+      },
+      scales: {
+        x: { type: "linear", ticks: { callback: (v) => fmtTime(v), maxTicksLimit: 6 } },
+        y: yOpts,
+      },
+    },
+  });
+}
+
+function applyTheme() {
+  const series = [css("--s1"), css("--s2"), css("--s3"), css("--s4")];
+  Chart.defaults.color = css("--muted");
+  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  for (const c of Object.values(charts)) {
+    c.data.datasets.forEach((d, i) => { d.borderColor = d.backgroundColor = series[i]; });
+    for (const ax of Object.values(c.options.scales)) {
+      ax.grid = { color: css("--grid") };
+      ax.border = { color: css("--axis") };
+      ax.ticks.color = css("--muted");
+    }
+    c.options.plugins.legend.labels.color = css("--ink-2");
+    c.update("none");
+  }
+  $("cells").querySelectorAll(".swatch").forEach((s, i) => { s.style.background = series[i]; });
+}
+
+function buildCharts() {
+  const cells = Array.from({ length: NUM_CELLS }, (_, i) => `Cell ${i + 1}`);
+  charts.volt = lineChart($("cVolt"), cells, { suggestedMin: 3.0, suggestedMax: 4.2 });
+  charts.soc = lineChart($("cSoc"), cells, { min: 0, max: 100 });
+  charts.temp = lineChart($("cTemp"), cells, { suggestedMin: 20, suggestedMax: 40 });
+  charts.curr = lineChart($("cCurr"), ["Pack current"], { suggestedMin: -1, suggestedMax: 4 });
+  $("cells").innerHTML = cells.map((c) =>
+    `<tr><td><span class="swatch"></span>${c}</td><td></td><td></td><td></td></tr>`).join("");
+  applyTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+}
+
+function push(chart, i, x, y) {
+  const d = chart.data.datasets[i].data;
+  d.push({ x, y });
+  while (d.length && d[0].x < x - WINDOW_S) d.shift();
+}
+
+function sample() {
+  const t = api._api_time_s();
+  for (let i = 0; i < NUM_CELLS; i++) {
+    push(charts.volt, i, t, api._api_cell_v(i));
+    push(charts.soc, i, t, api._api_cell_soc(i) * 100);
+    push(charts.temp, i, t, api._api_cell_temp_c(i));
+  }
+  push(charts.curr, 0, t, api._api_current_a());
+  for (const c of Object.values(charts)) c.update("none");
+  renderStatus(t);
+}
+
+function setStatus(el, ok, okText, badText) {
+  el.innerHTML = `<span class="dot" style="background:${ok ? "var(--good)" : "var(--critical)"}"></span>${ok ? "✓ " + okText : "✕ " + badText}`;
+}
+
+function renderStatus(t) {
+  $("tTime").textContent = fmtTime(t);
+  $("tVolt").textContent = api._api_pack_v().toFixed(2) + " V";
+  $("tCurr").textContent = api._api_current_a().toFixed(2) + " A";
+  setStatus($("tCont"), api._api_contactor() === 1, "Closed", "Open");
+  const f = api._api_faults();
+  setStatus($("tProt"), f === 0, "OK", "Fault");
+  $("tFaults").innerHTML = FAULTS.filter(([bit]) => f & bit).map(([, n]) => `<span class="chip">${n}</span>`).join("");
+  const rows = $("cells").rows;
+  for (let i = 0; i < NUM_CELLS; i++) {
+    rows[i].cells[1].textContent = api._api_cell_v(i).toFixed(3);
+    rows[i].cells[2].textContent = (api._api_cell_soc(i) * 100).toFixed(1);
+    rows[i].cells[3].textContent = api._api_cell_temp_c(i).toFixed(1);
+  }
+}
+
+function syncInputs() {
+  const load = parseFloat($("load").value), amb = parseFloat($("ambient").value);
+  $("loadVal").textContent = load.toFixed(1) + " A";
+  $("ambientVal").textContent = amb + " °C";
+  api._api_set_load(load);
+  api._api_set_ambient(amb);
+}
+
+function reset() {
+  api._api_reset(1.0);
+  syncInputs();
+  for (const c of Object.values(charts)) c.data.datasets.forEach((d) => { d.data = []; });
+  sample();
+}
+
+function tick() {
+  if (!running) return;
+  api._api_step(parseInt($("speed").value, 10));
+  sample();
+}
+
+function wire() {
+  $("load").addEventListener("input", syncInputs);
+  $("ambient").addEventListener("input", syncInputs);
+  $("run").addEventListener("click", () => {
+    running = !running;
+    $("run").textContent = running ? "Pause" : "Run";
+  });
+  $("reset").addEventListener("click", reset);
+  $("clear").addEventListener("click", () => {
+    if (!api._api_clear_faults()) alert("A fault condition is still present; fix it before clearing.");
+    sample();
+  });
+  $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });
+}
+
+function fail(msg) {
+  $("error").style.display = "block";
+  $("error").textContent = msg;
+}
+
+if (typeof Chart === "undefined") fail("Chart.js failed to load (check your network connection).");
+else if (typeof createBms === "undefined") fail("bms.js not found. Run `make wasm` first.");
+else createBms().then((m) => {
+  api = m;
+  window.bms = m;   // handy for poking at the sim from the console
+  buildCharts();
+  wire();
+  reset();
+  setInterval(tick, TICK_MS);
+  document.body.dataset.ready = "1";
+}).catch((e) => fail("WebAssembly failed to load: " + e));
+</script>
+</body>
+</html>
