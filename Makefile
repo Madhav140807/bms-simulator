@@ -16,7 +16,8 @@ TEST_BINS := $(patsubst tests/%.c,$(BUILD)/%,$(TEST_SRC))
 EMCC     ?= emcc
 WEB      := web
 API_SRC  := harness/api.c
-API_FNS  := reset set_load set_ambient set_cell_soc step clear_faults time_s \
+API_FNS  := reset set_load set_ambient set_cell_soc step clear_faults \
+            set_balancing balance_mask time_s \
             load_a current_a pack_v cell_v cell_soc cell_temp_c contactor \
             faults num_cells soc_est_pct
 comma    := ,

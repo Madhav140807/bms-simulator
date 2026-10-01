@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include "api.h"
+#include "balance.h"
 #include "hal_sim.h"
 #include "pack.h"
 #include "protection.h"
@@ -11,6 +12,8 @@
 static sim_pack_t pack;
 static prot_t prot;
 static soc_t est;
+static bal_t bal;
+static int balancing = 1;
 static double time_s;
 
 static int valid_cell(int cell)
@@ -24,6 +27,8 @@ void api_reset(double soc)
     hal_sim_attach(&pack);
     protection_init(&prot, NULL);
     soc_init(&est, NULL);
+    balance_init(&bal, NULL);
+    balancing = 1;
     time_s = 0.0;
 }
 
@@ -49,9 +54,15 @@ void api_step(int steps)
     for (int i = 0; i < steps; i++) {
         protection_step(&prot);
         soc_step(&est, (uint32_t)(API_DT_S * 1000));
+        balance_step(&bal, balancing && prot.faults == PROT_FAULT_NONE);
         sim_pack_step(&pack, API_DT_S);
         time_s += API_DT_S;
     }
+}
+
+void api_set_balancing(int enabled)
+{
+    balancing = enabled != 0;
 }
 
 int api_clear_faults(void)
@@ -66,6 +77,7 @@ double api_pack_v(void)    { return sim_pack_voltage(&pack); }
 int    api_contactor(void) { return pack.contactor_closed ? 1 : 0; }
 int    api_faults(void)    { return prot.faults; }
 int    api_num_cells(void) { return SIM_PACK_CELLS; }
+int    api_balance_mask(void) { return bal.mask; }
 
 double api_soc_est_pct(void)
 {

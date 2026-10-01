@@ -48,8 +48,11 @@ h1 { font-size: 20px; margin: 0; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px 16px;
 }
-.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
 .controls label { display: block; color: var(--ink-2); font-size: 12px; margin-bottom: 4px; }
+.controls label.check { display: flex; gap: 6px; align-items: center; color: var(--ink); font-size: 14px; }
+.controls input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.tile .note { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
 .controls input[type=range] { width: 100%; accent-color: var(--accent); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 button, select {
@@ -59,10 +62,10 @@ button, select {
 button:hover { border-color: var(--ink-2); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .val { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .tile .k { color: var(--ink-2); font-size: 12px; }
-.tile .v { font-size: 24px; font-weight: 600; margin-top: 2px; }
-.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.tile .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.status { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--critical); color: var(--ink); }
@@ -108,11 +111,16 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
       </div>
     </div>
     <div>
+      <label>Firmware</label>
+      <label class="check"><input id="balancing" type="checkbox" checked> Passive balancing enabled</label>
+    </div>
+    <div>
       <label>Actions</label>
       <div class="row">
         <button id="reset">Reset</button>
         <button id="clear">Clear faults</button>
         <button id="weak" title="Drop cell 3 to 5% SOC">Weak cell 3</button>
+        <button id="imbalance" title="Spread cell SOCs (80/72/66/75 %) and rest the pack so balancing can run">Imbalanced pack</button>
       </div>
     </div>
   </section>
@@ -122,6 +130,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
     <div class="card tile"><div class="k">Pack voltage</div><div class="v" id="tVolt">–</div></div>
     <div class="card tile"><div class="k">Pack current</div><div class="v" id="tCurr">–</div></div>
     <div class="card tile"><div class="k">SOC estimate (firmware)</div><div class="v" id="tSoc">–</div></div>
+    <div class="card tile"><div class="k">Cell spread</div><div class="v" id="tSpread">–</div><div class="note" id="tBal"></div></div>
     <div class="card tile"><div class="k">Contactor</div><div class="v"><span class="status" id="tCont"></span></div></div>
     <div class="card tile">
       <div class="k">Protection</div>
@@ -139,7 +148,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 
   <section class="card table-wrap" aria-label="Cell table">
     <table>
-      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>SOC (%)</th><th>Temperature (°C)</th></tr></thead>
+      <thead><tr><th>Cell</th><th>Voltage (V)</th><th>SOC (%)</th><th>Temperature (°C)</th><th>Balancing</th></tr></thead>
       <tbody id="cells"></tbody>
     </table>
   </section>
@@ -150,7 +159,7 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 <script>
 "use strict";
 const NUM_CELLS = 4;
-const WINDOW_S = 3600;   // seconds of sim history kept on the charts
+const MAX_POINTS = 600;  // samples kept per series: one minute of wall time
 const TICK_MS = 100;
 const FAULTS = [
   [0x01, "Over voltage"], [0x02, "Under voltage"], [0x04, "Over current (discharge)"],
@@ -212,7 +221,7 @@ function buildCharts() {
   charts.temp = lineChart($("cTemp"), cells, { suggestedMin: 20, suggestedMax: 40 });
   charts.curr = lineChart($("cCurr"), ["Pack current"], { suggestedMin: -1, suggestedMax: 4 });
   $("cells").innerHTML = cells.map((c) =>
-    `<tr><td><span class="swatch"></span>${c}</td><td></td><td></td><td></td></tr>`).join("");
+    `<tr><td><span class="swatch"></span>${c}</td><td></td><td></td><td></td><td></td></tr>`).join("");
   applyTheme();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 }
@@ -220,7 +229,7 @@ function buildCharts() {
 function push(chart, i, x, y) {
   const d = chart.data.datasets[i].data;
   d.push({ x, y });
-  while (d.length && d[0].x < x - WINDOW_S) d.shift();
+  if (d.length > MAX_POINTS) d.shift();
 }
 
 function sample() {
@@ -249,11 +258,18 @@ function renderStatus(t) {
   const f = api._api_faults();
   setStatus($("tProt"), f === 0, "OK", "Fault");
   $("tFaults").innerHTML = FAULTS.filter(([bit]) => f & bit).map(([, n]) => `<span class="chip">${n}</span>`).join("");
+  const mv = Array.from({ length: NUM_CELLS }, (_, i) => api._api_cell_v(i) * 1000);
+  const mask = api._api_balance_mask();
+  const bleeding = mv.map((_, i) => i + 1).filter((n) => (mask >> (n - 1)) & 1);
+  $("tSpread").textContent = (Math.max(...mv) - Math.min(...mv)).toFixed(0) + " mV";
+  $("tBal").textContent = !$("balancing").checked ? "Balancing disabled"
+    : bleeding.length ? "Bleeding cell " + bleeding.join(", ") : "Balancing idle";
   const rows = $("cells").rows;
   for (let i = 0; i < NUM_CELLS; i++) {
     rows[i].cells[1].textContent = api._api_cell_v(i).toFixed(3);
     rows[i].cells[2].textContent = (api._api_cell_soc(i) * 100).toFixed(1);
     rows[i].cells[3].textContent = api._api_cell_temp_c(i).toFixed(1);
+    rows[i].cells[4].textContent = (mask >> i) & 1 ? "Bleeding" : "–";
   }
 }
 
@@ -263,6 +279,7 @@ function syncInputs() {
   $("ambientVal").textContent = amb + " °C";
   api._api_set_load(load);
   api._api_set_ambient(amb);
+  api._api_set_balancing($("balancing").checked ? 1 : 0);
 }
 
 function reset() {
@@ -281,6 +298,7 @@ function tick() {
 function wire() {
   $("load").addEventListener("input", syncInputs);
   $("ambient").addEventListener("input", syncInputs);
+  $("balancing").addEventListener("change", () => { syncInputs(); sample(); });
   $("run").addEventListener("click", () => {
     running = !running;
     $("run").textContent = running ? "Pause" : "Run";
@@ -291,6 +309,12 @@ function wire() {
     sample();
   });
   $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });
+  $("imbalance").addEventListener("click", () => {
+    [0.80, 0.72, 0.66, 0.75].forEach((soc, i) => api._api_set_cell_soc(i, soc));
+    $("load").value = 0;
+    syncInputs();
+    sample();
+  });
 }
 
 function fail(msg) {

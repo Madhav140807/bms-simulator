@@ -119,6 +119,34 @@ void test_soc_estimate_corrects_after_rest(void)
     TEST_ASSERT_DOUBLE_WITHIN(1.5, 20.0, api_soc_est_pct());
 }
 
+void test_balancing_bleeds_high_cell_at_rest(void)
+{
+    api_set_cell_soc(0, 0.6);
+    api_step(2);
+    TEST_ASSERT_EQUAL_INT(0x01, api_balance_mask());
+    api_step(3 * 3600);
+    TEST_ASSERT_EQUAL_INT(0x00, api_balance_mask());
+    TEST_ASSERT_DOUBLE_WITHIN(0.02, 0.5, api_cell_soc(0));
+}
+
+void test_balancing_can_be_disabled(void)
+{
+    api_set_cell_soc(0, 0.6);
+    api_set_balancing(0);
+    api_step(10);
+    TEST_ASSERT_EQUAL_INT(0x00, api_balance_mask());
+}
+
+void test_fault_stops_balancing(void)
+{
+    api_set_cell_soc(0, 0.6);
+    api_step(2);
+    api_set_load(-5.0);   /* over current while charging */
+    api_step(5);
+    TEST_ASSERT_TRUE(api_faults() & PROT_FAULT_OC_CHG);
+    TEST_ASSERT_EQUAL_INT(0x00, api_balance_mask());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -135,5 +163,8 @@ int main(void)
     RUN_TEST(test_soc_estimate_seeded_from_ocv);
     RUN_TEST(test_soc_estimate_tracks_discharge);
     RUN_TEST(test_soc_estimate_corrects_after_rest);
+    RUN_TEST(test_balancing_bleeds_high_cell_at_rest);
+    RUN_TEST(test_balancing_can_be_disabled);
+    RUN_TEST(test_fault_stops_balancing);
     return UNITY_END();
 }

@@ -5,7 +5,7 @@
 2. [x] HAL: voltage/current/temperature sensing and contactor/balance control
 3. [x] Firmware: protection (over/under voltage, over current, over temp) with fault state
 4. [x] Firmware: SOC estimation (coulomb counting + OCV correction)
-5. [ ] Firmware: passive cell balancing
+5. [x] Firmware: passive cell balancing
 6. [ ] Harness: scenario runner wiring sim + HAL + firmware, CSV output
 7. [x] WebAssembly build (Emscripten)
 8. [x] Web dashboard (HTML/JS + Chart.js)
@@ -64,6 +64,28 @@
   (firmware)" tile and plots the estimate as a dashed line against the true
   cell SOCs. 3 more API tests (seeding, tracking a discharge, OCV correction
   after 5 min rest). Verified in headless Chromium.
+
+## Milestone 5: Passive cell balancing
+- `firmware/balance.c` + `.h`: includes only `hal.h`. Bleeds every cell that
+  is more than `start_mv` (15 mV) above the lowest cell, and keeps bleeding
+  until it is within `stop_mv` (5 mV) (hysteresis, state in `bal_t.mask`).
+- Inhibited (all bleeders off) while discharging above 500 mA, when the
+  lowest cell is below 3400 mV, when any cell is above 50.0 C, or when the
+  caller passes `allowed = false`. Charging and rest are allowed.
+- `balance_select()` is pure; `balance_step()` reads the HAL and drives
+  `hal_set_balance()`. Config via `bal_config_t`.
+- Harness: balancing runs every second, allowed only with no latched
+  protection fault; CSV gains `balance_mask`. The 1C discharge never
+  balances (load is above the inhibit limit).
+- Dashboard: "Passive balancing enabled" toggle, "Imbalanced pack" scenario
+  (cells 80/72/66/75 %, load 0 A), cell spread tile with bleeding cells,
+  Balancing column in the cell table. Charts now keep the last 600 samples
+  (one minute of wall time at any speed) instead of a fixed sim hour.
+- Verified in headless Chromium: imbalance starts bleeding cells 1, 2, 4;
+  spread drops from 107 mV to 8 mV in about 3.3 sim hours; toggle disables.
+- Tests: 17 balance (selection, hysteresis, each inhibit, HAL driving, sim
+  convergence at rest, no balancing under load) and 3 more API tests
+  (16 total). All suites pass.
 
 ## Milestones 7 and 8: WebAssembly build and web dashboard
 (Done ahead of 5 and 6. The dashboard drives sim + protection; firmware SOC

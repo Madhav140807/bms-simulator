@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "balance.h"
 #include "hal_sim.h"
 #include "pack.h"
 #include "protection.h"
@@ -18,19 +19,19 @@ static void print_header(void)
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         printf(",cell%d_v,cell%d_soc,cell%d_temp_c", i, i, i);
     }
-    printf(",contactor,faults,soc_est_pct\n");
+    printf(",contactor,faults,soc_est_pct,balance_mask\n");
 }
 
 static void print_row(int t, const sim_pack_t *pack, const prot_t *prot,
-                      const soc_t *soc)
+                      const soc_t *soc, const bal_t *bal)
 {
     printf("%d,%.3f,%.4f", t, sim_pack_current(pack), sim_pack_voltage(pack));
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         const sim_cell_t *c = &pack->cells[i];
         printf(",%.4f,%.4f,%.2f", sim_cell_voltage(c), c->soc, c->temp_c);
     }
-    printf(",%d,0x%02x,%.2f\n", pack->contactor_closed, prot->faults,
-           soc_get(soc) / 100.0);
+    printf(",%d,0x%02x,%.2f,0x%02x\n", pack->contactor_closed, prot->faults,
+           soc_get(soc) / 100.0, bal->mask);
 }
 
 int main(void)
@@ -43,12 +44,15 @@ int main(void)
     protection_init(&prot, NULL);
     soc_t soc;
     soc_init(&soc, NULL);
+    bal_t bal;
+    balance_init(&bal, NULL);
     print_header();
     for (int t = 0; t <= DURATION_S; t++) {
         protection_step(&prot);
         soc_step(&soc, (uint32_t)(DT_S * 1000));
+        balance_step(&bal, prot.faults == PROT_FAULT_NONE);
         if (t % LOG_EVERY_S == 0) {
-            print_row(t, &pack, &prot, &soc);
+            print_row(t, &pack, &prot, &soc, &bal);
         }
         sim_pack_step(&pack, DT_S);
     }
