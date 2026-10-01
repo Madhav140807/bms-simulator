@@ -294,6 +294,23 @@ static void test_sys_init_clears_injections(void)
     TEST_ASSERT_EQUAL_UINT(0, sys_injected(&sys, 9));
 }
 
+static void test_ekf_does_not_jump_on_load_steps(void)
+{
+    scenario_start(&run, scenario_find("overcurrent"), &sys);
+    double worst = 0.0;
+    while (sys.time_s < 120) {
+        sys_step(&sys);
+        scenario_apply(&run, &sys);
+        double min = 1.0;
+        for (int i = 0; i < SIM_PACK_CELLS; i++) {
+            min = sys.pack.cells[i].soc < min ? sys.pack.cells[i].soc : min;
+        }
+        double err = ekf_pack_cpct(&sys.ekf) / 100.0 - min * 100.0;
+        worst = (err < 0 ? -err : err) > worst ? (err < 0 ? -err : err) : worst;
+    }
+    TEST_ASSERT_TRUE(worst < 1.0);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -321,5 +338,6 @@ int main(void)
     RUN_TEST(test_internal_short_trips_and_keeps_draining);
     RUN_TEST(test_sensor_failure_is_not_reported_as_uv);
     RUN_TEST(test_sys_init_clears_injections);
+    RUN_TEST(test_ekf_does_not_jump_on_load_steps);
     return UNITY_END();
 }

@@ -9,8 +9,9 @@
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: bms [scenario] [--every SECONDS] | --list\n"
-                 "Runs a scenario and prints CSV to stdout (default %s, every %d s).\n",
+    fprintf(out, "usage: bms [scenario] [--every SECONDS] [--can] | --list\n"
+                 "Runs a scenario and prints CSV to stdout (default %s, every %d s).\n"
+                 "--can prints every CAN frame in candump log format instead.\n",
             DEFAULT_SCENARIO, DEFAULT_EVERY_S);
 }
 
@@ -26,10 +27,13 @@ int main(int argc, char **argv)
 {
     const char *name = DEFAULT_SCENARIO;
     long every = DEFAULT_EVERY_S;
+    int can = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--list") == 0) {
             list();
             return 0;
+        } else if (strcmp(argv[i], "--can") == 0) {
+            can = 1;
         } else if (strcmp(argv[i], "--every") == 0 && i + 1 < argc) {
             every = strtol(argv[++i], NULL, 10);
         } else if (argv[i][0] == '-') {
@@ -47,6 +51,10 @@ int main(int argc, char **argv)
         usage(stderr);
         return 2;
     }
-    csv_run(stdout, scn, (uint32_t)every);
+    if (can) {
+        csv_run_can(stdout, scn);
+    } else {
+        csv_run(stdout, scn, (uint32_t)every);
+    }
     return 0;
 }

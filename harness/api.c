@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include "api.h"
+#include "hal_sim.h"
 #include "scenario.h"
 #include "system.h"
 
@@ -180,4 +181,62 @@ int api_injected(int cell)
 void api_clear_injections(void)
 {
     sys_clear_injections(&sys);
+}
+
+int api_can_total(void)
+{
+    return (int)hal_sim_can_total();
+}
+
+/* Fetches frame `seq`; zeroed frame if it is gone or not sent yet. */
+static int can_frame(int seq, hal_can_frame_t *f, uint32_t *ms)
+{
+    if (seq < 0 || !hal_sim_can_get((uint32_t)seq, f, ms)) {
+        f->id = 0;
+        f->dlc = 0;
+        *ms = 0;
+        return 0;
+    }
+    return 1;
+}
+
+int api_can_valid(int seq)
+{
+    hal_can_frame_t f;
+    uint32_t ms;
+    return can_frame(seq, &f, &ms);
+}
+
+int api_can_id(int seq)
+{
+    hal_can_frame_t f;
+    uint32_t ms;
+    can_frame(seq, &f, &ms);
+    return f.id;
+}
+
+int api_can_dlc(int seq)
+{
+    hal_can_frame_t f;
+    uint32_t ms;
+    can_frame(seq, &f, &ms);
+    return f.dlc;
+}
+
+int api_can_byte(int seq, int index)
+{
+    hal_can_frame_t f;
+    uint32_t ms;
+    if (!can_frame(seq, &f, &ms) || index < 0 || index >= f.dlc) {
+        return 0;
+    }
+    return f.data[index];
+}
+
+double api_can_time_s(int seq)
+{
+    hal_can_frame_t f;
+    uint32_t ms;
+    can_frame(seq, &f, &ms);
+    return ms / 1000.0;
 }

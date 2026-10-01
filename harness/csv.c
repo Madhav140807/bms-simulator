@@ -1,4 +1,5 @@
 #include "csv.h"
+#include "hal_sim.h"
 
 void csv_header(FILE *out)
 {
@@ -45,4 +46,34 @@ int csv_run(FILE *out, const scenario_t *scn, uint32_t every_s)
         sys_step(&sys);
         scenario_apply(&run, &sys);
     }
+}
+
+static void print_frame(FILE *out, const hal_can_frame_t *f, uint32_t ms)
+{
+    fprintf(out, "(%06u.%06u) can0 %03X#", (unsigned)(ms / 1000u),
+            (unsigned)(ms % 1000u) * 1000u, (unsigned)f->id);
+    for (uint8_t i = 0; i < f->dlc; i++) {
+        fprintf(out, "%02X", f->data[i]);
+    }
+    fputc('\n', out);
+}
+
+int csv_run_can(FILE *out, const scenario_t *scn)
+{
+    bms_sys_t sys;
+    scn_run_t run;
+    uint32_t next = 0;
+    scenario_start(&run, scn, &sys);
+    while (!scenario_done(&run, &sys)) {
+        sys_step(&sys);
+        scenario_apply(&run, &sys);
+        hal_can_frame_t f;
+        uint32_t ms;
+        for (; next < hal_sim_can_total(); next++) {
+            if (hal_sim_can_get(next, &f, &ms)) {
+                print_frame(out, &f, ms);
+            }
+        }
+    }
+    return (int)next;
 }

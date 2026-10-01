@@ -49,6 +49,15 @@ void   api_corrupt_estimates(double pct);   /* set both estimators to pct */
 void   api_inject(int cell, int flags, int on);
 int    api_injected(int cell);
 void   api_clear_injections(void);
+
+/* CAN bus log. Frames are numbered from 0 since the last reset; only the
+ * newest HAL_SIM_CAN_RING are kept (api_can_valid tells). */
+int    api_can_total(void);
+int    api_can_valid(int seq);
+int    api_can_id(int seq);
+int    api_can_dlc(int seq);
+int    api_can_byte(int seq, int index);
+double api_can_time_s(int seq);
 int    api_balance_mask(void);          /* bit i = cell i bleeding */
 int    api_balancing(void);
 int    api_num_cells(void);

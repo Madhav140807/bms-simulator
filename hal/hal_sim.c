@@ -115,3 +115,45 @@ bool hal_get_balance(uint8_t cell)
 {
     return cell_ok(cell) && sim->balance_on[cell];
 }
+
+static hal_can_frame_t can_ring[HAL_SIM_CAN_RING];
+static uint32_t can_time[HAL_SIM_CAN_RING];
+static uint32_t can_total;
+static uint32_t can_now_ms;
+
+void hal_sim_can_set_time_ms(uint32_t ms)
+{
+    can_now_ms = ms;
+}
+
+void hal_sim_can_clear(void)
+{
+    can_total = 0;
+    can_now_ms = 0;
+}
+
+bool hal_can_send(const hal_can_frame_t *frame)
+{
+    if (frame == NULL || frame->dlc > HAL_CAN_MAX_DLC || frame->id > 0x7FFu) {
+        return false;
+    }
+    can_ring[can_total % HAL_SIM_CAN_RING] = *frame;
+    can_time[can_total % HAL_SIM_CAN_RING] = can_now_ms;
+    can_total++;
+    return true;
+}
+
+uint32_t hal_sim_can_total(void)
+{
+    return can_total;
+}
+
+bool hal_sim_can_get(uint32_t seq, hal_can_frame_t *frame, uint32_t *time_ms)
+{
+    if (seq >= can_total || can_total - seq > HAL_SIM_CAN_RING) {
+        return false;
+    }
+    *frame = can_ring[seq % HAL_SIM_CAN_RING];
+    *time_ms = can_time[seq % HAL_SIM_CAN_RING];
+    return true;
+}

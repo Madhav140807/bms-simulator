@@ -80,6 +80,17 @@ th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--gri
 th:first-child, td:first-child { text-align: left; }
 th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.canbus { margin-bottom: 16px; }
+.can-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.can-head h2 { font-size: 14px; margin: 0; }
+.can-head .check { display: flex; gap: 6px; align-items: center; }
+.can-head .note { color: var(--ink-2); font-size: 12px; }
+.can-log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; height: 260px; overflow: auto;
+  border: 1px solid var(--grid); border-radius: 6px; padding: 4px 0; }
+.can-row { display: grid; grid-template-columns: 80px 48px 190px 1fr; gap: 10px; padding: 1px 10px; white-space: nowrap; }
+.can-row .t, .can-row .hex { color: var(--ink-2); }
+.can-row.fault { border-left: 3px solid var(--critical); font-weight: 600; }
+@media (max-width: 640px) { .can-row { grid-template-columns: 70px 44px 1fr; } .can-row .hex { display: none; } }
 #error { display: none; color: var(--critical); margin-bottom: 12px; }
 .table-wrap { overflow-x: auto; }
 </style>
@@ -170,6 +181,23 @@ th { color: var(--ink-2); font-weight: 500; font-size: 12px; }
     <div class="card chart"><h2>Cell temperature (°C)</h2><div class="box"><canvas id="cTemp"></canvas></div></div>
     <div class="card chart"><h2>Pack current (A)</h2><div class="box"><canvas id="cCurr"></canvas></div></div>
     <div class="card chart wide" id="kalmanCard"><h2>Kalman filter vs coulomb counting: SOC of the lowest cell (%)</h2><div class="box"><canvas id="cKalman"></canvas></div></div>
+  </section>
+
+  <section class="card canbus" aria-label="CAN bus log">
+    <div class="can-head">
+      <h2>CAN bus log</h2>
+      <select id="canFilter" aria-label="Filter by CAN ID">
+        <option value="all">All IDs</option>
+        <option value="128">0x080 Fault event</option>
+        <option value="256">0x100 Pack</option>
+        <option value="257">0x101 Cell voltages</option>
+        <option value="258">0x102 Cell temperatures</option>
+        <option value="259">0x103 Status</option>
+      </select>
+      <label class="check"><input id="canFreeze" type="checkbox"> Freeze log</label>
+      <span class="note" id="canStats"></span>
+    </div>
+    <div class="can-log" id="canLog" role="log" aria-live="off"></div>
   </section>
 
   <section class="card table-wrap" aria-label="Cell table">
@@ -289,6 +317,57 @@ function sample() {
   renderStatus(t);
   renderControls();
   renderScenario(t);
+  renderCan();
+}
+
+// ---- CAN log ----
+const CAN_KEEP = 300, CAN_SHOW = 80;
+let canSeq = 0, canFrames = [];
+
+function clearCan() {
+  canSeq = 0;
+  canFrames = [];
+}
+
+const u16 = (b, i) => b[i] | (b[i + 1] << 8);
+const i16 = (b, i) => (u16(b, i) << 16) >> 16;
+const faultNames = (bits) => FAULTS.filter(([bit]) => bits & bit).map(([, n]) => n).join(", ") || "none";
+
+function decodeCan(f) {
+  const b = f.data;
+  switch (f.id) {
+    case 0x080: return `⚠ FAULT latched: ${faultNames(b[0])} (all: ${faultNames(b[1])})`;
+    case 0x100: return `pack ${(u16(b, 0) / 100).toFixed(2)} V, ${(i16(b, 2) / 100).toFixed(2)} A, SOC ${(u16(b, 4) / 100).toFixed(2)} %, contactor ${b[6] & 1 ? "closed" : "open"}, faults 0x${b[7].toString(16).padStart(2, "0")}`;
+    case 0x101: return `cells ${[0, 2, 4, 6].map((i) => u16(b, i)).join(" ")} mV`;
+    case 0x102: return `temps ${[0, 2, 4, 6].map((i) => (i16(b, i) / 10).toFixed(1)).join(" ")} °C`;
+    case 0x103: return `SOC (coulomb) ${(u16(b, 0) / 100).toFixed(2)} %, balance 0x${b[2].toString(16).padStart(2, "0")}, faults 0x${b[3].toString(16).padStart(2, "0")}, alive ${b[4]}`;
+    default: return "";
+  }
+}
+
+function readCan() {
+  const total = api._api_can_total();
+  if (total < canSeq) clearCan();   // the sim was reset
+  for (let seq = Math.max(canSeq, total - CAN_KEEP); seq < total; seq++) {
+    if (!api._api_can_valid(seq)) continue;
+    const dlc = api._api_can_dlc(seq);
+    canFrames.push({ seq, t: api._api_can_time_s(seq), id: api._api_can_id(seq),
+                     data: Array.from({ length: dlc }, (_, i) => api._api_can_byte(seq, i)) });
+  }
+  canSeq = total;
+  if (canFrames.length > CAN_KEEP) canFrames.splice(0, canFrames.length - CAN_KEEP);
+}
+
+function renderCan() {
+  readCan();
+  if ($("canFreeze").checked) return;
+  const filter = $("canFilter").value;
+  const shown = canFrames.filter((f) => filter === "all" || f.id === Number(filter)).slice(-CAN_SHOW).reverse();
+  $("canLog").innerHTML = shown.map((f) => `<div class="can-row${f.id === 0x080 ? " fault" : ""}" data-id="${f.id}">`
+    + `<span class="t">${f.t.toFixed(3)}</span><span>${f.id.toString(16).toUpperCase().padStart(3, "0")}</span>`
+    + `<span class="hex">[${f.data.length}] ${f.data.map((x) => x.toString(16).toUpperCase().padStart(2, "0")).join(" ")}</span>`
+    + `<span>${decodeCan(f)}</span></div>`).join("");
+  $("canStats").textContent = `${canSeq} frames sent · showing ${shown.length} newest first · 4 periodic frames per sim second`;
 }
 
 function setStatus(el, ok, okText, badText) {
@@ -371,6 +450,7 @@ function clearCharts() {
 }
 
 function reset() {
+  clearCan();
   $("scenario").value = "-1";
   $("scnNote").textContent = "Drive the pack with the controls below.";
   api._api_reset(1.0);
@@ -383,6 +463,7 @@ function reset() {
 function startScenario() {
   const i = parseInt($("scenario").value, 10);
   if (i < 0 || !api._api_start_scenario(i)) return reset();
+  clearCan();
   clearCharts();
   setRunning(true);
   sample();
@@ -426,6 +507,8 @@ function wire() {
   $("injHeat").addEventListener("click", inject(1));
   $("injShort").addEventListener("click", inject(2));
   $("injSensor").addEventListener("click", inject(4));
+  $("canFilter").addEventListener("change", renderCan);
+  $("canFreeze").addEventListener("change", renderCan);
   $("injClear").addEventListener("click", () => { api._api_clear_injections(); sample(); });
   $("corrupt").addEventListener("click", () => { api._api_corrupt_estimates(50); sample(); });
   $("weak").addEventListener("click", () => { api._api_set_cell_soc(2, 0.05); sample(); });

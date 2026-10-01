@@ -157,6 +157,15 @@ static void test_injection_ignores_bad_cell_and_clears(void)
     TEST_ASSERT_EQUAL_DOUBLE(0.0, sim_pack_short_current(&pack, 0));
 }
 
+static void test_load_change_sags_voltage_immediately(void)
+{
+    double rest = sim_cell_voltage(&pack.cells[0]);
+    sim_pack_set_current(&pack, 3.0);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, rest - 3.0 * 0.02, sim_cell_voltage(&pack.cells[0]));
+    sim_pack_set_contactor(&pack, false);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, rest, sim_cell_voltage(&pack.cells[0]));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -175,5 +184,6 @@ int main(void)
     RUN_TEST(test_short_drains_and_heats_its_cell);
     RUN_TEST(test_open_contactor_does_not_stop_short);
     RUN_TEST(test_injection_ignores_bad_cell_and_clears);
+    RUN_TEST(test_load_change_sags_voltage_immediately);
     return UNITY_END();
 }

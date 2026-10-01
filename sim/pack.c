@@ -45,20 +45,39 @@ void sim_pack_apply_mismatch(sim_pack_t *pack, const sim_mismatch_t *m, uint32_t
     }
 }
 
+/* Current through each cell right now: string + bleed + internal short. */
+static double cell_current(const sim_pack_t *pack, int cell)
+{
+    return sim_pack_current(pack) + sim_pack_balance_current(pack, cell) +
+           sim_pack_short_current(pack, cell);
+}
+
+/* The I*R drop is instantaneous: refresh each cell's current whenever a
+ * switch or the load changes, so voltage and current readings agree. */
+static void sync_cell_currents(sim_pack_t *pack)
+{
+    for (int i = 0; i < SIM_PACK_CELLS; i++) {
+        pack->cells[i].current_a = cell_current(pack, i);
+    }
+}
+
 void sim_pack_set_current(sim_pack_t *pack, double current_a)
 {
     pack->load_a = current_a;
+    sync_cell_currents(pack);
 }
 
 void sim_pack_set_contactor(sim_pack_t *pack, bool closed)
 {
     pack->contactor_closed = closed;
+    sync_cell_currents(pack);
 }
 
 void sim_pack_set_balance(sim_pack_t *pack, int cell, bool on)
 {
     if (cell >= 0 && cell < SIM_PACK_CELLS) {
         pack->balance_on[cell] = on;
+        sync_cell_currents(pack);
     }
 }
 
@@ -92,6 +111,7 @@ void sim_pack_set_short(sim_pack_t *pack, int cell, double r_ohm)
 {
     if (cell_ok(cell)) {
         pack->short_r_ohm[cell] = r_ohm > 0.0 ? r_ohm : 0.0;
+        sync_cell_currents(pack);
     }
 }
 
@@ -105,10 +125,9 @@ double sim_pack_short_current(const sim_pack_t *pack, int cell)
 
 void sim_pack_step(sim_pack_t *pack, double dt_s)
 {
-    double string_a = sim_pack_current(pack);
     for (int i = 0; i < SIM_PACK_CELLS; i++) {
         double short_a = sim_pack_short_current(pack, i);
-        double cell_a = string_a + sim_pack_balance_current(pack, i) + short_a;
+        double cell_a = cell_current(pack, i);
         double short_w = short_a * short_a * pack->short_r_ohm[i];
         pack->cells[i].extra_heat_w = pack->heater_w[i] + short_w;
         sim_cell_step(&pack->cells[i], cell_a, dt_s, pack->ambient_c);

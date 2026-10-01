@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "balance.h"
+#include "can_tx.h"
 #include "ekf.h"
 #include "pack.h"
 #include "protection.h"
@@ -31,6 +32,7 @@ typedef struct {
     soc_t      soc;   /* coulomb counting + OCV rest correction */
     ekf_t      ekf;   /* Kalman filter */
     bal_t      bal;
+    can_tx_t   can;
     bool       balancing;  /* user enable; faults also stop balancing */
     uint32_t   time_s;
 } bms_sys_t;
@@ -39,8 +41,8 @@ typedef struct {
  * attaches the HAL with sensor noise on, and starts the firmware.
  * Both are seeded, so every run is reproducible. */
 void   sys_init(bms_sys_t *sys, double soc);
-/* One second: run protection, both SOC estimators and balancing, then
- * advance the sim. */
+/* One second: run protection, both SOC estimators, balancing and the CAN
+ * transmitter (timestamped at the current time), then advance the sim. */
 void   sys_step(bms_sys_t *sys);
 void   sys_set_cell_soc(bms_sys_t *sys, int cell, double soc);
 double sys_cell_spread_mv(const bms_sys_t *sys);

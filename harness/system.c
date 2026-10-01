@@ -13,6 +13,8 @@ void sys_init(bms_sys_t *sys, double soc)
     soc_init(&sys->soc, NULL);
     ekf_init(&sys->ekf, NULL);
     balance_init(&sys->bal, NULL);
+    can_tx_init(&sys->can);
+    hal_sim_can_clear();
     sys->balancing = true;
     sys->time_s = 0;
 }
@@ -24,6 +26,10 @@ void sys_step(bms_sys_t *sys)
     soc_step(&sys->soc, SYS_DT_MS);
     ekf_step(&sys->ekf, SYS_DT_MS);
     balance_step(&sys->bal, sys->balancing && sys->prot.faults == PROT_FAULT_NONE);
+    can_status_t st;
+    can_collect(&st, &sys->prot, &sys->soc, &sys->ekf, &sys->bal);
+    hal_sim_can_set_time_ms(sys->time_s * 1000u);
+    can_tx_step(&sys->can, &st);
     sim_pack_step(&sys->pack, SYS_DT_MS / 1000.0);
     sys->time_s++;
 }

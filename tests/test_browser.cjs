@@ -3,6 +3,7 @@
 // dark mode, fails on any page error, and drives the protection, balancing and
 // scenario features through the UI. Screenshots go to build/screenshots/.
 // Needs the WASM build and Playwright: `npm install && npx playwright install chromium`.
+// Set BMS_URL to test a deployed site instead (e.g. the GitHub Pages URL).
 "use strict";
 const fs = require("fs");
 const http = require("http");
@@ -194,6 +195,56 @@ async function checkFaultInjection(p) {
   await p.click("#reset");
 }
 
+function canRows(p) {
+  return p.$$eval("#canLog .can-row", (rows) => rows.map((r) => ({
+    id: Number(r.dataset.id), fault: r.classList.contains("fault"), text: r.textContent,
+  })));
+}
+
+async function checkCanLog(p) {
+  await p.click("#reset");
+  await p.selectOption("#speed", "1");
+  await setRange(p, "load", 3);
+  check(await p.isVisible("#canLog"), "can_panel_visible");
+  await waitText(p, "#tTime", /^0:00:(0[5-9]|[1-5]\d)/);
+  const rows = await canRows(p);
+  const ids = new Set(rows.map((r) => r.id));
+  check([0x100, 0x101, 0x102, 0x103].every((id) => ids.has(id)), "can_periodic_ids_present");
+  const count1 = parseInt(await text(p, "#canStats"), 10);
+  await p.waitForTimeout(800);
+  check(parseInt(await text(p, "#canStats"), 10) > count1, "can_frame_count_grows");
+
+  // Freeze so the log and the table show the same sim step, then compare.
+  await p.click("#run");
+  await p.waitForTimeout(300);
+  const snap = await canRows(p);
+  const packV = parseFloat(snap.find((r) => r.id === 0x100).text.match(/pack ([\d.]+) V/)[1]);
+  check(Math.abs(packV - parseFloat((await tiles(p))["Pack voltage"])) < 0.05, "can_pack_voltage_matches_tile");
+  const canMv = snap.find((r) => r.id === 0x101).text.match(/cells ([\d ]+) mV/)[1].trim().split(" ").map(Number);
+  const tableMv = (await cellRows(p)).map((r) => r.measMv);
+  check(JSON.stringify(canMv) === JSON.stringify(tableMv), "can_cell_voltages_match_bms_readings");
+  await p.click("#run");
+
+  await setRange(p, "load", 15);
+  check(await waitText(p, "#canLog", /FAULT latched: Over current \(discharge\)/), "can_fault_event_on_trip");
+  check((await canRows(p)).some((r) => r.id === 0x080 && r.fault), "can_fault_event_highlighted");
+  await setRange(p, "load", 3);
+  await p.click("#clear");
+
+  await p.selectOption("#canFilter", "258");
+  await p.waitForTimeout(300);
+  const filtered = await canRows(p);
+  check(filtered.length > 0 && filtered.every((r) => r.id === 0x102), "can_filter_by_id");
+  await p.selectOption("#canFilter", "all");
+  await p.check("#canFreeze");
+  const frozen = await text(p, "#canLog");
+  await p.waitForTimeout(600);
+  check((await text(p, "#canLog")) === frozen, "can_freeze_holds_log");
+  await p.uncheck("#canFreeze");
+  await p.screenshot({ path: path.join(shotDir, "can-log.png"), fullPage: true });
+  await p.selectOption("#speed", "60");
+}
+
 async function checkProtection(p) {
   await setRange(p, "load", 15);
   check(await waitText(p, "#tFaults", /Over current/), "overcurrent_trips");
@@ -241,13 +292,15 @@ async function checkScenarios(p) {
 }
 
 async function main() {
-  if (!fs.existsSync(path.join(webDir, "bms.wasm"))) {
+  const remote = process.env.BMS_URL;
+  if (!remote && !fs.existsSync(path.join(webDir, "bms.wasm"))) {
     console.error("web/bms.wasm missing. Run `make wasm` first.");
     process.exit(2);
   }
   fs.mkdirSync(shotDir, { recursive: true });
-  const server = await serve();
-  const url = `http://127.0.0.1:${server.address().port}/`;
+  const server = remote ? null : await serve();
+  const url = remote || `http://127.0.0.1:${server.address().port}/`;
+  console.log(`testing ${url}`);
   const browser = await chromium.launch();
   try {
     for (const scheme of ["light", "dark"]) {
@@ -258,6 +311,7 @@ async function main() {
         await checkMismatchAndNoise(p);
         await checkKalman(p);
         await checkFaultInjection(p);
+        await checkCanLog(p);
         await checkProtection(p);
         await checkBalancing(p);
         await checkScenarios(p);
@@ -268,7 +322,7 @@ async function main() {
     }
   } finally {
     await browser.close();
-    server.close();
+    if (server) server.close();
   }
   console.log(`\n${count} Tests ${failures} Failures`);
   process.exit(failures ? 1 : 0);

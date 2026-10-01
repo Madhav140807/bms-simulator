@@ -49,6 +49,26 @@ createBms().then((m) => {
     check(m._api_scenario_done() && sameFaults && sameTime && sameV && sameSoc && sameEkf,
           `scenario_${name}_matches_native`);
   }
+  // CAN frames: the WASM bus must carry exactly what the native run prints.
+  const native = execFileSync(path.join(root, "build", "bms"), ["overcurrent", "--can"], { encoding: "utf8" })
+    .trim().split("\n");
+  const idx = [...Array(m._api_scenario_count()).keys()]
+    .find((i) => m.UTF8ToString(m._api_scenario_name(i)) === "overcurrent");
+  m._api_start_scenario(idx);
+  const wasm = [];
+  let seq = 0;
+  while (!m._api_scenario_done()) {
+    m._api_step(1);
+    for (; seq < m._api_can_total(); seq++) {
+      const id = m._api_can_id(seq).toString(16).toUpperCase().padStart(3, "0");
+      const data = Array.from({ length: m._api_can_dlc(seq) },
+        (_, i) => m._api_can_byte(seq, i).toString(16).toUpperCase().padStart(2, "0")).join("");
+      const ms = Math.round(m._api_can_time_s(seq) * 1000);
+      const ts = `${String(Math.floor(ms / 1000)).padStart(6, "0")}.${String((ms % 1000) * 1000).padStart(6, "0")}`;
+      wasm.push(`(${ts}) can0 ${id}#${data}`);
+    }
+  }
+  check(wasm.length === native.length && wasm.every((l, i) => l === native[i]), "can_frames_match_native");
   console.log(`\n${count} Tests ${failures} Failures`);
   process.exit(failures ? 1 : 0);
 });

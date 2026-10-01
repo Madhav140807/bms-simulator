@@ -12,7 +12,7 @@
 9. [x] Sim realism: cell manufacturing mismatch and sensor noise
 10. [x] Firmware: Kalman filter SOC estimation, dashboard chart
 11. [x] Fault injection (overheat, internal short, sensor failure) + sensor plausibility
-12. [ ] Firmware: CAN messages, dashboard CAN log panel
+12. [x] Firmware: CAN messages, dashboard CAN log panel
 
 Items 9 to 12 were requested later (the request called them milestones 4 to
 6, which here were already SOC, balancing and the scenario runner).
@@ -239,7 +239,37 @@ the API and dashboard by the later milestones, see their sections.)
   Sensor failure, Remove injected faults), status note, Injected column,
   "Sensor fault" label; scenario picker lists the 3 new scenarios.
 - Tests: 4 pack, 1 HAL, 6 protection, 1 SOC, 1 EKF, 4 scenario/system,
-  1 API. 168 unit tests, 11 WASM (9 scenarios match native), 49 browser
+  1 API. 168 unit tests, 14 WASM (9 scenarios match native), 49 browser
   checks (new: each injection button trips the right fault on the right
   cell, sensor failure reads 0 and is not UV, clear is blocked until the
   injection is removed). All passing.
+
+## Milestone 12: CAN messages and CAN log panel
+- HAL: `hal_can_send()` with `hal_can_frame_t` (11-bit ID, DLC, 8 bytes).
+  Sim backend stores frames with a timestamp in a 1024 frame ring
+  (`hal_sim_can_total/get/clear/set_time_ms`); rejects DLC > 8 and IDs
+  above 0x7FF.
+- `firmware/can_tx.c`: little endian frames, layout documented in
+  `can_tx.h`: 0x100 pack (V, I, Kalman SOC, contactor, faults), 0x101 cell
+  mV, 0x102 cell 0.1 C, 0x103 status (coulomb SOC, balance mask, faults,
+  alive counter) every second; 0x080 FAULT_EVENT once when new fault bits
+  latch (again after a clear). Values come from protection's last sample,
+  so the bus carries exactly what the BMS measured.
+- `build/bms <scenario> --can` prints every frame in candump log format,
+  e.g. `(000062.000000) can0 080#0404`.
+- Sim timing bug found and fixed: a cell's I*R drop only updated on the
+  next sim step, so right after a load change the BMS saw the new current
+  with the old voltage. The Kalman filter jumped ~8 % for a few seconds.
+  Switch and load changes now update cell currents immediately. This also
+  exposed that scenarios seeded the SOC estimators under load; they now
+  seed at rest, as at power up.
+- Dashboard: CAN bus log panel (newest first: time, ID, raw bytes, decoded
+  meaning; fault events highlighted with an icon), ID filter, freeze.
+- `tests/test_browser.cjs` can target a deployed site with `BMS_URL=...`.
+- Tests: 14 CAN (encoders byte for byte, fault event rules, alive wrap,
+  bus ring and rejects, 4 frames per sim second, trip on the bus, candump
+  format), 1 pack and 1 scenario timing regression. 184 unit tests,
+  15 WASM (new: CAN frames identical to native), 58 browser checks (new:
+  panel visible and filling, all periodic IDs, decoded pack voltage
+  matches the tile, decoded cell mV equal the BMS readings, fault event on
+  a trip and highlighted, filter, freeze). All passing.
