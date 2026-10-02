@@ -273,3 +273,18 @@ the API and dashboard by the later milestones, see their sections.)
   panel visible and filling, all periodic IDs, decoded pack voltage
   matches the tile, decoded cell mV equal the BMS readings, fault event on
   a trip and highlighted, filter, freeze). All passing.
+
+## Dashboard visual pass
+- `web/index.html`: restyled only (no element IDs, classes read by JS/tests,
+  or script logic changed). Header got a brand mark and a live-sim badge;
+  cards got real elevation (shadow + radius tokens) instead of a flat
+  border; buttons/inputs got hover, active and focus-visible states;
+  status chips and the CAN fault rows now use a tinted background instead
+  of just a border; table rows and CAN log rows highlight on hover; the
+  page fades in using the `data-ready` flag the script already sets.
+  Categorical chart colors unchanged and re-validated (light and dark both
+  pass the colorblind-safety/contrast checks).
+- Checked by rendering the page in headless Chromium (light, dark, and a
+  420px mobile width) against a stubbed WASM API, since Emscripten isn't
+  available in this environment to run the real `make test-browser`
+  suite. No selectors `tests/test_browser.cjs` depends on were touched.
