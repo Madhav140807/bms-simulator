@@ -112,6 +112,19 @@ async function checkPageInfo(p, url) {
   check(box === null || box.x >= 0, "tooltip_stays_on_screen");
 }
 
+// With the WASM blocked, the page must still show its error message.
+async function checkLoadError(browser, url) {
+  const p = await browser.newPage();
+  await p.route(/bms\.(js|wasm)$/, (r) => r.abort());
+  await p.goto(url);
+  const err = p.locator("#error");
+  const shown = await err.waitFor({ state: "visible", timeout: 10000 }).then(() => true, () => false);
+  const opaque = await p.waitForFunction(() => getComputedStyle(document.querySelector("main")).opacity === "1",
+    null, { timeout: 5000 }).then(() => true, () => false);
+  check(shown && opaque && /bms\.js|WebAssembly/.test(await err.textContent()), "load_error_visible");
+  await p.close();
+}
+
 // No horizontal page scroll at tablet and phone widths, in both themes.
 async function checkNarrowLayout(browser, url) {
   for (const [name, width] of [["tablet", 820], ["phone", 390]]) {
@@ -369,6 +382,7 @@ async function main() {
       await p.close();
     }
     await checkNarrowLayout(browser, url);
+    await checkLoadError(browser, url);
   } finally {
     await browser.close();
     if (server) server.close();

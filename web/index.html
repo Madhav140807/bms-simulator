@@ -74,7 +74,7 @@ body {
 }
 main { max-width: 1200px; margin: 0 auto; padding: 22px 16px 48px; }
 main { opacity: 0; transform: translateY(6px); }
-body[data-ready="1"] main { opacity: 1; transform: none; transition: opacity .45s var(--ease), transform .45s var(--ease); }
+body[data-ready="1"] main, body.failed main { opacity: 1; transform: none; transition: opacity .45s var(--ease), transform .45s var(--ease); }
 header {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
   margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
@@ -708,6 +708,7 @@ function wire() {
 }
 
 function fail(msg) {
+  document.body.classList.add("failed");   // main stays hidden until ready otherwise
   $("error").style.display = "block";
   $("error").textContent = msg;
 }
