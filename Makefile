@@ -39,7 +39,7 @@ EMFLAGS  := -sMODULARIZE=1 -sEXPORT_NAME=createBms -sENVIRONMENT=web,node \
             -sEXPORTED_FUNCTIONS=[$(EXPORTS)] \
             -sEXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString]
 
-.PHONY: all test test-wasm test-browser run scenarios clean wasm serve
+.PHONY: all test test-wasm test-browser run scenarios clean wasm serve screenshots
 
 SCENARIO ?= discharge_1c
 CSV_DIR  := $(BUILD)/csv
@@ -80,6 +80,10 @@ test-wasm: wasm $(BUILD)/bms
 # `npx playwright install chromium` once).
 test-browser: wasm
 	node tests/test_browser.cjs
+
+# Regenerates web/og.png and docs/dashboard.png (needs Playwright).
+screenshots: wasm
+	node scripts/screenshots.cjs
 
 serve: wasm
 	cd $(WEB) && python3 -m http.server 8000
