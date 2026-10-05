@@ -32,6 +32,7 @@ async function stage(p) {
   await p.click("#injHeat");
   await p.waitForFunction(() => bms._api_time_s() >= 1200, null, { timeout: 60000 });
   await p.click("#run");   // pause so the image is stable
+  await p.evaluate(() => document.activeElement.blur());
 }
 
 async function main() {
