@@ -18,4 +18,20 @@ written in C, compiled to WebAssembly, and shown in a live browser dashboard.
 - After finishing a milestone: run all tests, update PROGRESS.md, commit with a short
   clear message, and push.
 - NEVER include "Co-Authored-By", "Generated with Claude Code", or any Claude
-  attribution
+  attribution in commit messages, PR descriptions, code comments or docs.
+
+## Milestones
+1. Build system, Unity tests, battery pack sim model (cell OCV curve, internal
+   resistance, coulomb counted SOC, simple thermal model; 4S pack).
+2. HAL: voltage, current and temperature sensing plus contactor and balance
+   control, with a sim backend.
+3. Firmware: protection (over/under voltage, over current, over temperature)
+   with a latched fault state that opens the contactor.
+4. Firmware: SOC estimation (coulomb counting + OCV correction at rest).
+5. Firmware: passive cell balancing.
+6. Harness: scenario runner wiring sim + HAL + firmware, CSV output.
+7. WebAssembly build (Emscripten).
+8. Web dashboard (HTML/JS + Chart.js).
+
+Later additions (cell mismatch and sensor noise, Kalman filter SOC, fault
+injection, CAN messages) are tracked in PROGRESS.md.
