@@ -1,3 +1,4 @@
+/* HAL backend for the simulated pack: rounds, clamps and optionally adds sensor noise. */
 #include <math.h>
 #include <stddef.h>
 #include "hal.h"

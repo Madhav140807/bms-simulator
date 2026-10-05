@@ -1,3 +1,4 @@
+/* Unit tests for the single cell model. */
 #include "unity.h"
 #include "cell.h"
 

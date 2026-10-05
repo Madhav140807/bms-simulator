@@ -1,3 +1,4 @@
+/* CSV header, rows and a scenario runner that writes them. */
 #include "csv.h"
 #include "hal_sim.h"
 

@@ -1,3 +1,4 @@
+/* Per cell extended Kalman filter SOC estimator, float only, no libm. */
 #include <stddef.h>
 #include "ekf.h"
 #include "ocv.h"

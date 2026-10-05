@@ -1,3 +1,4 @@
+/* Unit tests for the deterministic PRNG. */
 #include "unity.h"
 #include "rng.h"
 

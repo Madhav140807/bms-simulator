@@ -1,3 +1,4 @@
+/* Deterministic xorshift32 PRNG and a libm free gaussian for reproducible noise. */
 #include "rng.h"
 
 void sim_rng_seed(sim_rng_t *rng, uint32_t seed)

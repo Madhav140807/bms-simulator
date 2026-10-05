@@ -1,3 +1,4 @@
+/* Unit tests for the series pack model. */
 #include "unity.h"
 #include "pack.h"
 

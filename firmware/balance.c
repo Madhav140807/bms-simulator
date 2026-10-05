@@ -1,3 +1,4 @@
+/* Passive balancing: filtered cell voltages, hysteresis and inhibit rules. */
 #include <stddef.h>
 #include "balance.h"
 

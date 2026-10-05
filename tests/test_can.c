@@ -1,3 +1,4 @@
+/* Unit tests for CAN frame encoding, fault events and the sim CAN bus. */
 #include <string.h>
 #include "unity.h"
 #include "can_tx.h"

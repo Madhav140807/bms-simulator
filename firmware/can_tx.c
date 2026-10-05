@@ -1,3 +1,4 @@
+/* Encodes the BMS CAN frames (pack, cells, temps, status, fault event). */
 #include <string.h>
 #include "can_tx.h"
 

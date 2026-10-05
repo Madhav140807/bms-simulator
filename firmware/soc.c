@@ -1,3 +1,4 @@
+/* Coulomb counting SOC estimator with OCV correction after a rest period. */
 #include <stddef.h>
 #include "ocv.h"
 #include "soc.h"

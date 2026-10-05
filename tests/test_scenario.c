@@ -1,3 +1,4 @@
+/* Unit tests for the system, scenario table and CSV output. */
 #include <string.h>
 #include "unity.h"
 #include "csv.h"

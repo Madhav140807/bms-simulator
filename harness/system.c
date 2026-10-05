@@ -1,3 +1,4 @@
+/* Wires sim, HAL and firmware into one system stepped one second at a time. */
 #include <stddef.h>
 #include "hal_sim.h"
 #include "system.h"

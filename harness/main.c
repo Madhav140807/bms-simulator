@@ -1,3 +1,4 @@
+/* Command line runner: runs a scenario and prints CSV or candump style CAN frames. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

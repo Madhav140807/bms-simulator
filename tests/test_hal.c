@@ -1,3 +1,4 @@
+/* Unit tests for the sim HAL backend. */
 #include <math.h>
 #include "unity.h"
 #include "hal.h"

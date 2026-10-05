@@ -1,3 +1,4 @@
+/* Shared OCV table, interpolation, slope and plausibility checks for the SOC estimators. */
 #include "ocv.h"
 
 #define CPCT_FULL 10000u

@@ -1,3 +1,4 @@
+/* Built in scenario table and the event player that applies it to the system. */
 #include <stddef.h>
 #include <string.h>
 #include "scenario.h"

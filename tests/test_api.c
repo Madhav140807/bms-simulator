@@ -1,3 +1,4 @@
+/* Unit tests for the flat C API used by the dashboard. */
 #include <string.h>
 #include "unity.h"
 #include "api.h"

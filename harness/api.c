@@ -1,3 +1,4 @@
+/* Flat C API over one simulated system, exported to JavaScript by the WASM build. */
 #include <stddef.h>
 #include "api.h"
 #include "hal_sim.h"

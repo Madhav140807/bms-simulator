@@ -1,3 +1,4 @@
+/* Unit tests for passive cell balancing. */
 #include "unity.h"
 #include "hal_sim.h"
 #include "balance.h"

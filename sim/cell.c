@@ -1,3 +1,4 @@
+/* Single NMC cell: OCV lookup, I*R sag, coulomb counted SOC, lumped thermal model. */
 #include "cell.h"
 
 #define OCV_POINTS 11

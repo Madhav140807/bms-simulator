@@ -1,3 +1,4 @@
+/* 4S series pack: shared current, main contactor, bleed resistors, mismatch and injected faults. */
 #include "pack.h"
 #include "rng.h"
 

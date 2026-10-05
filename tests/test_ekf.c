@@ -1,3 +1,4 @@
+/* Unit tests for the OCV helpers and the Kalman filter SOC estimator. */
 #include "unity.h"
 #include "ekf.h"
 #include "hal_sim.h"

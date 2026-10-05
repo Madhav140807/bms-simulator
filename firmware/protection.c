@@ -1,3 +1,4 @@
+/* Protection state machine: thresholds, debounce, latched faults, contactor control. */
 #include <stddef.h>
 #include "protection.h"
 

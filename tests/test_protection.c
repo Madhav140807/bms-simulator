@@ -1,3 +1,4 @@
+/* Unit tests for the protection state machine. */
 #include "unity.h"
 #include "hal_sim.h"
 #include "protection.h"

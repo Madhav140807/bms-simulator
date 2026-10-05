@@ -1,3 +1,4 @@
+/* Unit tests for coulomb counting SOC estimation. */
 #include "unity.h"
 #include "hal_sim.h"
 #include "soc.h"
