@@ -130,7 +130,7 @@ Fault bits: 0x01 OV, 0x02 UV, 0x04 OC discharge, 0x08 OC charge, 0x10 OT,
 |---|---|---|---|
 | Unit | `make test` | 184 tests in 11 suites | Every module, with the Unity framework |
 | WASM | `make test-wasm` | 15 tests | The WASM build gives exactly the same results and CAN frames as native for every scenario |
-| Browser | `make test-browser` | 71 checks | The dashboard end to end in headless Chromium: light and dark mode, protection, balancing, scenarios, fault injection, CAN log, tooltips and narrow layouts |
+| Browser | `make test-browser` | 72 checks | The dashboard end to end in headless Chromium: light and dark mode, protection, balancing, scenarios, fault injection, CAN log, tooltips, narrow layouts and the load error message |
 
 CI runs all three on every push. The site only deploys after CI passes. The
 browser test can also check the live site:

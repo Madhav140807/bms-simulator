@@ -314,8 +314,9 @@ the API and dashboard by the later milestones, see their sections.)
 - MIT LICENSE; removed `firmware/.gitkeep`. Header comment on every C
   source; no dead code found. Zero warnings with gcc 13, clang 18 and emcc
   under `-std=c11 -Wall -Wextra -Werror`.
-- Tests: 184 unit, 15 WASM, 71 browser checks (new: meta and social tags,
+- Tests: 184 unit, 15 WASM, 72 browser checks (new: meta and social tags,
   og.png and favicon served, intro, footer link, a tooltip on every tile,
   hover and click behaviour, no horizontal overflow at tablet and phone
-  widths in both themes). Verified the overflow check fails when the
-  tooltip flip is broken. All passing.
+  widths in both themes, load error shown when the WASM is blocked).
+  Verified the overflow and load error checks fail without their fixes.
+  All passing.
