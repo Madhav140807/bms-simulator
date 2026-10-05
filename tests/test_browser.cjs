@@ -20,7 +20,8 @@ try {
 const root = path.join(__dirname, "..");
 const webDir = path.join(root, "web");
 const shotDir = path.join(root, "build", "screenshots");
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm",
+                ".svg": "image/svg+xml", ".png": "image/png" };
 const WAIT_MS = 60000;
 
 let failures = 0, count = 0;
@@ -83,6 +84,52 @@ async function checkLoads(p, scheme) {
   check(/V$/.test(t["Pack voltage"]) && /%$/.test(t["SOC (coulomb count)"]), `${scheme}_tiles_render`);
   check(await p.evaluate(() => Chart.getChart("cVolt").data.datasets[0].data.length > 1), `${scheme}_charts_have_data`);
   await p.screenshot({ path: path.join(shotDir, `${scheme}.png`), fullPage: true });
+}
+
+// Page metadata, intro, footer, favicon, social preview image and tile tooltips.
+async function checkPageInfo(p, url) {
+  const meta = (sel) => p.getAttribute(sel, "content").catch(() => null);
+  check(((await meta('meta[name="description"]')) || "").length > 50, "meta_description");
+  const og = await meta('meta[property="og:image"]');
+  check(/og\.png$/.test(og || "") && await meta('meta[name="twitter:card"]') === "summary_large_image", "og_twitter_tags");
+  const fetchOk = async (rel) => (await p.request.get(new URL(rel, url).href)).ok();
+  check(await fetchOk("og.png") && await fetchOk(await p.getAttribute('link[rel="icon"]', "href")), "og_image_and_favicon_served");
+  check((await text(p, "#intro")).length > 100, "intro_present");
+  check(/github\.com\/Madhav140807\/bms-simulator/.test(await p.getAttribute("#repoLink", "href")), "footer_repo_link");
+  const tips = await p.$$eval(".tile", (ts) => ts.every((t) => t.querySelector(".info") && t.querySelector(".tip").textContent.length > 20));
+  check(tips, "every_tile_has_tooltip");
+  const tip = p.locator("#tipContactor");
+  const hidden = !(await tip.isVisible());
+  await p.hover('[aria-describedby="tipContactor"]');
+  const shown = await tip.isVisible();
+  await p.mouse.move(0, 0);
+  check(hidden && shown && !(await tip.isVisible()), "tooltip_shows_on_hover");
+  await p.click('[aria-describedby="tipProtection"]');
+  const pinned = await p.locator("#tipProtection").isVisible();
+  await p.click("h1");
+  check(pinned && !(await p.locator("#tipProtection").isVisible()), "tooltip_click_toggles");
+  const box = await tip.boundingBox().catch(() => null);
+  check(box === null || box.x >= 0, "tooltip_stays_on_screen");
+}
+
+// No horizontal page scroll at tablet and phone widths, in both themes.
+async function checkNarrowLayout(browser, url) {
+  for (const [name, width] of [["tablet", 820], ["phone", 390]]) {
+    for (const scheme of ["light", "dark"]) {
+      const p = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: scheme });
+      await p.goto(url, { waitUntil: "networkidle" });
+      await p.waitForSelector('body[data-ready="1"]', { timeout: 10000 });
+      await p.hover('[aria-describedby="tipProtection"]');
+      const fits = await p.evaluate(() => {
+        const vw = document.documentElement.clientWidth;
+        const tip = document.querySelector("#tipProtection").getBoundingClientRect();
+        return document.documentElement.scrollWidth <= vw && tip.left >= 0 && tip.right <= vw;
+      });
+      check(fits, `${name}_${scheme}_no_horizontal_overflow`);
+      await p.screenshot({ path: path.join(shotDir, `${name}-${scheme}.png`), fullPage: true });
+      await p.close();
+    }
+  }
 }
 
 // Per cell rows of the table: true voltage (mV), BMS reading (mV), capacity (Ah).
@@ -308,6 +355,7 @@ async function main() {
       const p = await openPage(browser, url, scheme, errors);
       await checkLoads(p, scheme);
       if (scheme === "light") {
+        await checkPageInfo(p, url);
         await checkMismatchAndNoise(p);
         await checkKalman(p);
         await checkFaultInjection(p);
@@ -320,6 +368,7 @@ async function main() {
       errors.forEach((e) => console.log("  page error: " + e));
       await p.close();
     }
+    await checkNarrowLayout(browser, url);
   } finally {
     await browser.close();
     if (server) server.close();

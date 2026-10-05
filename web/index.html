@@ -4,6 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BMS Simulator</title>
+<meta name="description" content="Battery pack simulator and BMS firmware in C, running live in the browser via WebAssembly. Trip protections, inject faults and watch a Kalman filter estimate state of charge.">
+<meta name="theme-color" content="#2a78d6">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BMS Simulator">
+<meta property="og:description" content="Battery pack simulator and BMS firmware in C, running live in the browser via WebAssembly. Trip protections, inject faults and watch a Kalman filter estimate state of charge.">
+<meta property="og:url" content="https://madhav140807.github.io/bms-simulator/">
+<meta property="og:image" content="https://madhav140807.github.io/bms-simulator/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BMS Simulator dashboard with live cell voltage, SOC and temperature charts">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BMS Simulator">
+<meta name="twitter:description" content="Battery pack simulator and BMS firmware in C, running live in the browser via WebAssembly. Trip protections, inject faults and watch a Kalman filter estimate state of charge.">
+<meta name="twitter:image" content="https://madhav140807.github.io/bms-simulator/og.png">
 <style>
 :root {
   color-scheme: light;
@@ -94,7 +109,7 @@ header .sub { font-size: 12.5px; max-width: 46ch; }
 .controls .scenario, .controls .inject { grid-column: 1 / -1; }
 .controls .note { color: var(--ink-2); font-size: 12px; margin-top: 7px; }
 .tile .note { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
-.controls input[type=range] { width: 100%; accent-color: var(--accent); }
+.controls input[type=range] { width: 100%; margin: 4px 0 0; accent-color: var(--accent); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 button, select {
   font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2);
@@ -110,8 +125,10 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 button.primary:hover { filter: brightness(1.07); }
 .val { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.tile { position: relative; overflow: hidden; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+@media (min-width: 720px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .controls .actions { grid-column: span 2; } }
+.tile { position: relative; }
 .tile .k { color: var(--ink-2); font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
 .tile .v { font-size: 22px; font-weight: 620; margin-top: 4px; letter-spacing: -0.01em; }
 .status { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
@@ -127,7 +144,7 @@ button.primary:hover { filter: brightness(1.07); }
 .chart .box { position: relative; height: 240px; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
-th:first-child, td:first-child { text-align: left; }
+th:first-child, td:first-child { text-align: left; white-space: nowrap; }
 th { color: var(--ink-2); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.02em; }
 tbody tr { transition: background var(--ease); }
 tbody tr:hover { background: var(--surface-2); }
@@ -148,6 +165,23 @@ tbody tr:hover { background: var(--surface-2); }
 .can-row .t, .can-row .hex { color: var(--muted); }
 .can-row.fault { background: var(--critical-bg); border-left: 3px solid var(--critical); font-weight: 600; }
 @media (max-width: 640px) { .can-row { grid-template-columns: 70px 44px 1fr; } .can-row .hex { display: none; } }
+.intro { color: var(--ink-2); margin: -6px 0 18px; max-width: 75ch; }
+.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+button.info {
+  flex: none; width: 20px; height: 20px; padding: 0; border-radius: 50%;
+  font: 600 11px/1 system-ui, sans-serif; color: var(--ink-2); background: transparent;
+}
+button.info:hover { transform: none; color: var(--ink); }
+.tip {
+  display: none; position: absolute; z-index: 10; top: 40px; left: 10px; width: min(260px, calc(100vw - 32px));
+  padding: 9px 11px; border-radius: var(--radius-sm); font-size: 12px; line-height: 1.45; font-weight: 400;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--axis); box-shadow: var(--shadow);
+}
+.tip.flip { left: auto; right: 10px; }
+.info:hover + .tip, .info:focus-visible + .tip, .info[aria-expanded="true"] + .tip { display: block; }
+footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--ink-2); font-size: 12px;
+  display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; }
+a { color: var(--accent); }
 #error { display: none; color: var(--critical); background: var(--critical-bg); border: 1px solid var(--critical); margin-bottom: 12px; }
 .table-wrap { overflow-x: auto; }
 </style>
@@ -170,6 +204,9 @@ tbody tr:hover { background: var(--surface-2); }
     </div>
     <span class="live-badge"><span class="dot"></span>Live in-browser sim</span>
   </header>
+  <p class="intro" id="intro">A simulated 4 cell lithium ion pack wired to real BMS firmware written in C, compiled to
+    WebAssembly and running in your browser. Pick a scenario or drag the load and temperature sliders, inject a fault,
+    and watch the firmware trip its protections, balance the cells and estimate state of charge.</p>
   <div id="error" class="card"></div>
 
   <section class="card controls" aria-label="Controls">
@@ -217,7 +254,7 @@ tbody tr:hover { background: var(--surface-2); }
       <label class="check"><input id="balancing" type="checkbox" checked> Passive balancing enabled</label>
       <label class="check"><input id="noise" type="checkbox" checked> Sensor noise (σ 2 mV, 10 mA, 0.1 °C)</label>
     </div>
-    <div>
+    <div class="actions">
       <label>Actions</label>
       <div class="row">
         <button id="reset">Reset</button>
@@ -230,15 +267,68 @@ tbody tr:hover { background: var(--surface-2); }
   </section>
 
   <section class="tiles" aria-label="Pack status">
-    <div class="card tile"><div class="k">Sim time</div><div class="v" id="tTime">0:00:00</div></div>
-    <div class="card tile"><div class="k">Pack voltage</div><div class="v" id="tVolt">–</div></div>
-    <div class="card tile"><div class="k">Pack current</div><div class="v" id="tCurr">–</div></div>
-    <div class="card tile"><div class="k">SOC (coulomb count)</div><div class="v" id="tSoc">–</div></div>
-    <div class="card tile"><div class="k">SOC (Kalman)</div><div class="v" id="tEkf">–</div><div class="note" id="tEkfSigma"></div></div>
-    <div class="card tile"><div class="k">Cell spread</div><div class="v" id="tSpread">–</div><div class="note" id="tBal"></div></div>
-    <div class="card tile"><div class="k">Contactor</div><div class="v"><span class="status" id="tCont"></span></div></div>
     <div class="card tile">
-      <div class="k">Protection</div>
+      <div class="tile-head">
+        <div class="k">Sim time</div>
+        <button class="info" type="button" aria-label="What is Sim time?" aria-describedby="tipSimtime">i</button>
+        <span class="tip" role="tooltip" id="tipSimtime">Simulated time since the last reset or scenario start. The sim runs one firmware step per simulated second.</span>
+      </div>
+      <div class="v" id="tTime">0:00:00</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">Pack voltage</div>
+        <button class="info" type="button" aria-label="What is Pack voltage?" aria-describedby="tipPackvoltage">i</button>
+        <span class="tip" role="tooltip" id="tipPackvoltage">Sum of the four cell voltages. Falls under load because of each cell's internal resistance.</span>
+      </div>
+      <div class="v" id="tVolt">–</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">Pack current</div>
+        <button class="info" type="button" aria-label="What is Pack current?" aria-describedby="tipPackcurrent">i</button>
+        <span class="tip" role="tooltip" id="tipPackcurrent">Current through the pack: positive is discharge, negative is charge. Zero while the contactor is open.</span>
+      </div>
+      <div class="v" id="tCurr">–</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">SOC (coulomb count)</div>
+        <button class="info" type="button" aria-label="What is SOC (coulomb count)?" aria-describedby="tipSOCcoulombcount">i</button>
+        <span class="tip" role="tooltip" id="tipSOCcoulombcount">Firmware state of charge from counting amp-seconds in and out. Drifts if it starts wrong; only corrected from cell voltage after 5 minutes at rest.</span>
+      </div>
+      <div class="v" id="tSoc">–</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">SOC (Kalman)</div>
+        <button class="info" type="button" aria-label="What is SOC (Kalman)?" aria-describedby="tipSOCKalman">i</button>
+        <span class="tip" role="tooltip" id="tipSOCKalman">Firmware state of charge from a Kalman filter that compares measured cell voltage with the expected voltage. Corrects itself under load. The ± figure is its own uncertainty.</span>
+      </div>
+      <div class="v" id="tEkf">–</div><div class="note" id="tEkfSigma"></div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">Cell spread</div>
+        <button class="info" type="button" aria-label="What is Cell spread?" aria-describedby="tipCellspread">i</button>
+        <span class="tip" role="tooltip" id="tipCellspread">Difference between the highest and lowest cell voltage. Passive balancing bleeds the higher cells through a resistor until they are within a few mV.</span>
+      </div>
+      <div class="v" id="tSpread">–</div><div class="note" id="tBal"></div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">Contactor</div>
+        <button class="info" type="button" aria-label="What is Contactor?" aria-describedby="tipContactor">i</button>
+        <span class="tip" role="tooltip" id="tipContactor">The main relay between the pack and the load. The firmware opens it when a protection fault trips, which cuts the current.</span>
+      </div>
+      <div class="v"><span class="status" id="tCont"></span></div>
+    </div>
+    <div class="card tile">
+      <div class="tile-head">
+        <div class="k">Protection</div>
+        <button class="info" type="button" aria-label="What is Protection?" aria-describedby="tipProtection">i</button>
+        <span class="tip" role="tooltip" id="tipProtection">Firmware fault state: over and under voltage, over current, over temperature and implausible sensor readings. Faults latch until you press Clear faults and the condition is gone.</span>
+      </div>
       <div class="v"><span class="status" id="tProt"></span></div>
       <div class="chips" id="tFaults"></div>
     </div>
@@ -275,6 +365,10 @@ tbody tr:hover { background: var(--surface-2); }
       <tbody id="cells"></tbody>
     </table>
   </section>
+  <footer>
+    <span>Battery pack simulator and BMS firmware in C, compiled to WebAssembly. MIT licensed.</span>
+    <a href="https://github.com/Madhav140807/bms-simulator" id="repoLink">Source on GitHub</a>
+  </footer>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -554,6 +648,29 @@ function tick() {
   sample();
 }
 
+// Info tooltips: hover or keyboard focus shows them; a click or tap pins one
+// open. Tips that would run off the right edge are anchored to the right.
+function wireTips() {
+  const buttons = [...document.querySelectorAll(".info")];
+  const place = (b) => {
+    const tip = b.nextElementSibling;
+    tip.classList.remove("flip");
+    if (b.closest(".tile").getBoundingClientRect().left + 268 > document.documentElement.clientWidth) tip.classList.add("flip");
+  };
+  for (const b of buttons) {
+    b.addEventListener("mouseenter", () => place(b));
+    b.addEventListener("focus", () => place(b));
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = b.getAttribute("aria-expanded") !== "true";
+      buttons.forEach((o) => o.setAttribute("aria-expanded", "false"));
+      place(b);
+      b.setAttribute("aria-expanded", String(open));
+    });
+  }
+  document.addEventListener("click", () => buttons.forEach((b) => b.setAttribute("aria-expanded", "false")));
+}
+
 function wire() {
   for (const [id, push] of Object.entries(INPUTS)) {
     $(id).addEventListener($(id).type === "checkbox" ? "change" : "input", () => {
@@ -576,6 +693,7 @@ function wire() {
   $("injHeat").addEventListener("click", inject(1));
   $("injShort").addEventListener("click", inject(2));
   $("injSensor").addEventListener("click", inject(4));
+  wireTips();
   $("canFilter").addEventListener("change", renderCan);
   $("canFreeze").addEventListener("change", renderCan);
   $("injClear").addEventListener("click", () => { api._api_clear_injections(); sample(); });
