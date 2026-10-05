@@ -288,3 +288,34 @@ the API and dashboard by the later milestones, see their sections.)
   420px mobile width) against a stubbed WASM API, since Emscripten isn't
   available in this environment to run the real `make test-browser`
   suite. No selectors `tests/test_browser.cjs` depends on were touched.
+
+## Final polish
+- CLAUDE.md restored (the committed copy was cut off): full no attribution
+  rule and the 8 original milestones.
+- Re-verified the dashboard visual pass against the real WASM build (it had
+  only been checked against a stubbed API). Found two problems: the page
+  stayed invisible (opacity 0) when WASM or Chart.js failed to load, hiding
+  the error message, and `.tile { overflow: hidden }` would clip the new
+  tooltips. Both fixed; unit, WASM and browser suites pass.
+- Dashboard: favicon, meta description, Open Graph and Twitter tags with
+  `web/og.png` (1200x630), short intro, an info tooltip on every status tile
+  (hover, focus or tap; flips left near the right edge), footer with the
+  repo link. Layout checked at 1440, 820 and 390 px in light and dark:
+  tiles are now 4 columns on desktop/tablet and 2 on phones (8 in one row
+  had wrapped labels and "Closed" overflowing its tile), range sliders no
+  longer overflow by 4 px, Actions spans two columns on wide screens, cell
+  names no longer wrap on phones. Overheat cell is a fault injection button.
+- `make screenshots` (scripts/screenshots.cjs) regenerates `web/og.png` and
+  `docs/dashboard.png` from a real run.
+- README rewritten (demo link, badges, hero image, features, Mermaid
+  diagram, how each part works, CAN table, testing, structure, limitations,
+  future work). `docs/ARCHITECTURE.md` covers the design decisions,
+  especially the HAL boundary.
+- MIT LICENSE; removed `firmware/.gitkeep`. Header comment on every C
+  source; no dead code found. Zero warnings with gcc 13, clang 18 and emcc
+  under `-std=c11 -Wall -Wextra -Werror`.
+- Tests: 184 unit, 15 WASM, 71 browser checks (new: meta and social tags,
+  og.png and favicon served, intro, footer link, a tooltip on every tile,
+  hover and click behaviour, no horizontal overflow at tablet and phone
+  widths in both themes). Verified the overflow check fails when the
+  tooltip flip is broken. All passing.
